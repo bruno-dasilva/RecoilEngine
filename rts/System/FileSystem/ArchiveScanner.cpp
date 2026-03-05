@@ -634,6 +634,9 @@ void CArchiveScanner::ReadCache()
 			if (!ReadCacheData(prevCacheFile, true))
 				continue;
 
+			brokenArchives.clear();
+			brokenArchivesIndex.clear();
+
 			// nullify hashes, filesInfo
 			for (auto& ai : archiveInfos) {
 				ai.checksum = sha512::NULL_RAW_DIGEST;
