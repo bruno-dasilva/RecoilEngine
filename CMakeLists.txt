@@ -58,6 +58,12 @@ if    (CUSTOM_COMPILER_DEFINITIONS)
 	add_definitions(${CUSTOM_COMPILER_DEFINITIONS})
 endif (CUSTOM_COMPILER_DEFINITIONS)
 
+option(HASH_INSTRUMENTATION "Enable hash container performance profiling" FALSE)
+if    (HASH_INSTRUMENTATION)
+	add_definitions(-DSPRING_HASH_INSTRUMENTATION)
+	add_definitions(-DSPRING_SOURCE_DIR="${CMAKE_SOURCE_DIR}/")
+endif (HASH_INSTRUMENTATION)
+
 
 ### set the default build type
 if    (NOT CMAKE_BUILD_TYPE)

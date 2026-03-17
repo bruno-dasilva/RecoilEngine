@@ -20,7 +20,7 @@ class IArchive;
 class CVFSHandler
 {
 public:
-	CVFSHandler(const char* s) { SetName(s); ReserveArchives(); }
+	CVFSHandler(const char* s) { SetName(s); ReserveArchives(); SPRING_TAG_HASH_ARRAY_SOURCE(archives); }
 	~CVFSHandler() { DeleteArchives(); }
 
 	const char* GetName() const { return vfsName; }

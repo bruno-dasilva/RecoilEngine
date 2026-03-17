@@ -14,6 +14,10 @@
 	#include "System/Threading/ThreadPool.h"
 #endif
 
+#ifdef SPRING_HASH_INSTRUMENTATION
+	#include "System/HashContainerRegistry.h"
+#endif
+
 using ProfileMutexType = spring::mutex; //spring::spinlock
 using HashNamMutexType = spring::mutex; //spring::spinlock
 
@@ -125,6 +129,12 @@ CTimeProfiler::CTimeProfiler()
 	RegisterTimer("Lua::Callins::Unsynced");
 	RegisterTimer("Lua::CollectGarbage::Synced");
 	RegisterTimer("Lua::CollectGarbage::Unsynced");
+#ifdef SPRING_HASH_INSTRUMENTATION
+	RegisterTimer("HashMap::find");
+	RegisterTimer("HashMap::insert");
+	RegisterTimer("HashMap::erase");
+	RegisterTimer("HashMap::rehash");
+#endif
 	ResetState();
 }
 
@@ -213,6 +223,10 @@ void CTimeProfiler::ToggleLock(bool lock)
 
 void CTimeProfiler::Update()
 {
+#ifdef SPRING_HASH_INSTRUMENTATION
+	HashContainerRegistry::GetInstance().HarvestForTimeProfiler();
+#endif
+
 	if (!enabled) {
 		UpdateRaw();
 		ResortProfilesRaw();

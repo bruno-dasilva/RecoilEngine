@@ -89,5 +89,15 @@ namespace spring {
 	};
 };
 
+#ifdef SPRING_HASH_INSTRUMENTATION
+	#define SPRING_TAG_HASH_SOURCE(container) \
+		(container).setStatsSource(__FILE__, __LINE__)
+	#define SPRING_TAG_HASH_ARRAY_SOURCE(arr) \
+		for (auto& _hashTagElem : (arr)) _hashTagElem.setStatsSource(__FILE__, __LINE__)
+#else
+	#define SPRING_TAG_HASH_SOURCE(container) ((void)0)
+	#define SPRING_TAG_HASH_ARRAY_SOURCE(arr) ((void)0)
+#endif
+
 #endif
 

@@ -11,6 +11,26 @@
 #include <iterator>
 #include <utility>
 
+#ifdef SPRING_HASH_INSTRUMENTATION
+#include <algorithm>
+#include <cxxabi.h>
+#include <source_location>
+#include <typeinfo>
+#include "HashContainerStats.h"
+#include "HashContainerRegistry.h"
+#include <chrono>
+#ifndef HASH_INSTR_GETTIME_DEFINED
+#define HASH_INSTR_GETTIME_DEFINED
+inline int64_t hashInstrGetNs() {
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(
+		std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+}
+#endif
+#define HASHSET_INSTR(...) __VA_ARGS__
+#else
+#define HASHSET_INSTR(...)
+#endif
+
 #define DCHECK_EQ_F(a, b)
 #define DCHECK_LT_F(a, b)
 #define DCHECK_NE_F(a, b)
@@ -180,6 +200,66 @@ public:
 
 	// ------------------------------------------------------------------------
 
+#ifdef SPRING_HASH_INSTRUMENTATION
+private:
+	static const char* typeNameStr()
+	{
+		static const char* name = [] {
+			int status = 0;
+			char* demangled = abi::__cxa_demangle(typeid(MyType).name(), nullptr, nullptr, &status);
+			return (status == 0 && demangled) ? demangled : typeid(MyType).name();
+		}();
+		return name;
+	}
+
+	void initStats(std::source_location loc)
+	{
+		_stats.sourceFile = loc.file_name();
+		_stats.sourceLine = loc.line();
+		_stats.typeName = typeNameStr();
+		HashContainerRegistry::GetInstance().Register(&_stats);
+	}
+
+public:
+	HashSet(std::source_location loc = std::source_location::current())
+	{
+		initStats(loc);
+	}
+
+	HashSet(size_t num_elems, std::source_location loc = std::source_location::current())
+	{
+		initStats(loc);
+		reserve(num_elems);
+	}
+
+	HashSet(const std::initializer_list<KeyT>& l, std::source_location loc = std::source_location::current())
+	{
+		initStats(loc);
+		reserve(l.size());
+		for (const auto& key: l) {
+			insert(key);
+		}
+	}
+
+	HashSet(const HashSet& other)
+	{
+		_stats.sourceFile = other._stats.sourceFile;
+		_stats.sourceLine = other._stats.sourceLine;
+		_stats.typeName = typeNameStr();
+		HashContainerRegistry::GetInstance().Register(&_stats);
+		reserve(other.size());
+		insert(other.cbegin(), other.cend());
+	}
+
+	HashSet(HashSet&& other)
+	{
+		_stats.sourceFile = other._stats.sourceFile;
+		_stats.sourceLine = other._stats.sourceLine;
+		_stats.typeName = typeNameStr();
+		HashContainerRegistry::GetInstance().Register(&_stats);
+		*this = std::move(other);
+	}
+#else
 	HashSet() = default;
 	HashSet(size_t num_elems) { reserve(num_elems); }
 	HashSet(const std::initializer_list<KeyT>& l)
@@ -200,6 +280,7 @@ public:
 	{
 		*this = std::move(other);
 	}
+#endif
 
 	HashSet& operator=(const HashSet& other)
 	{
@@ -223,6 +304,8 @@ public:
 		}
 		::operator delete(_states);
 		::operator delete(_keys);
+
+		HASHSET_INSTR(HashContainerRegistry::GetInstance().Unregister(&_stats));
 	}
 
 	void swap(HashSet& other)
@@ -235,6 +318,10 @@ public:
 		std::swap(_num_filled,       other._num_filled);
 		std::swap(_max_probe_length, other._max_probe_length);
 		std::swap(_mask,             other._mask);
+		HASHSET_INSTR(
+			updateLiveStats();
+			other.updateLiveStats();
+		);
 	}
 
 	// -------------------------------------------------------------
@@ -245,6 +332,7 @@ public:
 		while (bucket<_num_buckets && _states[bucket] != State::FILLED) {
 			++bucket;
 		}
+		HASHSET_INSTR(if (bucket < _num_buckets) _stats.iterations++);
 		return iterator(this, bucket);
 	}
 
@@ -255,6 +343,7 @@ public:
 		while (bucket<_num_buckets && _states[bucket] != State::FILLED) {
 			++bucket;
 		}
+		HASHSET_INSTR(if (bucket < _num_buckets) _stats.iterations++);
 		return const_iterator(this, bucket);
 	}
 
@@ -320,42 +409,58 @@ public:
 
 	// -----------------------------------------------------
 
-	// Insert an element, unless it already exists.
-	// Returns a pair consisting of an iterator to the inserted element
-	// (or to the element that prevented the insertion)
-	// and a bool denoting whether the insertion took place.
 	std::pair<iterator, bool> insert(const KeyT& key)
 	{
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
 		check_expand_need();
 
 		auto bucket = find_or_allocate(key);
 
 		if (_states[bucket] == State::FILLED) {
+			HASHSET_INSTR(
+				_stats.inserts++;
+				_stats.insertNs += hashInstrGetNs() - t0;
+				updateLiveStats();
+			);
 			return { iterator(this, bucket), false };
 		} else {
+			HASHSET_INSTR(if (_states[bucket] == State::ACTIVE) _stats.numTombstones--);
 			_states[bucket] = State::FILLED;
 			new(_keys + bucket) KeyT(key);
 			_num_filled++;
+			HASHSET_INSTR(
+				_stats.inserts++;
+				_stats.insertNs += hashInstrGetNs() - t0;
+				updateLiveStats();
+			);
 			return { iterator(this, bucket), true };
 		}
 	}
 
-	// Insert an element, unless it already exists.
-	// Returns a pair consisting of an iterator to the inserted element
-	// (or to the element that prevented the insertion)
-	// and a bool denoting whether the insertion took place.
 	std::pair<iterator, bool> insert(KeyT&& key)
 	{
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
 		check_expand_need();
 
 		auto bucket = find_or_allocate(key);
 
 		if (_states[bucket] == State::FILLED) {
+			HASHSET_INSTR(
+				_stats.inserts++;
+				_stats.insertNs += hashInstrGetNs() - t0;
+				updateLiveStats();
+			);
 			return { iterator(this, bucket), false };
 		} else {
+			HASHSET_INSTR(if (_states[bucket] == State::ACTIVE) _stats.numTombstones--);
 			_states[bucket] = State::FILLED;
 			new(_keys + bucket) KeyT(std::move(key));
 			_num_filled++;
+			HASHSET_INSTR(
+				_stats.inserts++;
+				_stats.insertNs += hashInstrGetNs() - t0;
+				updateLiveStats();
+			);
 			return { iterator(this, bucket), true };
 		}
 	}
@@ -373,36 +478,49 @@ public:
 		}
 	}
 
-	// Same as above, but contains(key) MUST be false
 	void insert_unique(KeyT&& key)
 	{
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
 		assert(!contains(key));
 		check_expand_need();
 		auto bucket = find_empty_bucket(key);
+		HASHSET_INSTR(if (_states[bucket] == State::ACTIVE) _stats.numTombstones--);
 		_states[bucket] = State::FILLED;
 		new(_keys + bucket) KeyT(std::move(key));
 		_num_filled++;
+		HASHSET_INSTR(
+			_stats.inserts++;
+			_stats.insertNs += hashInstrGetNs() - t0;
+			updateLiveStats();
+		);
 	}
 
 	// -------------------------------------------------------
 
-	/* Erase an element from the hash set.
-	   return false if element was not found */
 	bool erase(const KeyT& key)
 	{
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
 		auto bucket = find_filled_bucket(key);
 		if (bucket != (size_t)-1) {
 			_states[bucket] = State::ACTIVE;
 			_keys[bucket].~KeyT();
 			_num_filled -= 1;
+			HASHSET_INSTR(
+				_stats.erases++;
+				_stats.eraseNs += hashInstrGetNs() - t0;
+				_stats.numTombstones++;
+				updateLiveStats();
+			);
 			return true;
 		} else {
+			HASHSET_INSTR(
+				_stats.erases++;
+				_stats.eraseNs += hashInstrGetNs() - t0;
+			);
 			return false;
 		}
 	}
 
-	/* Erase an element using an iterator.
-	   Returns an iterator to the next element (or end()). */
 	iterator erase(iterator it)
 	{
 		DCHECK_EQ_F(it._set, this);
@@ -410,10 +528,14 @@ public:
 		_states[it._bucket] = State::ACTIVE;
 		_keys[it._bucket].~KeyT();
 		_num_filled -= 1;
+		HASHSET_INSTR(
+			_stats.erases++;
+			_stats.numTombstones++;
+			updateLiveStats();
+		);
 		return ++it;
 	}
 
-	// Remove all elements, keeping full capacity.
 	void clear()
 	{
 		for (size_t bucket=0; bucket<_num_buckets; ++bucket) {
@@ -424,15 +546,21 @@ public:
 		}
 		_num_filled = 0;
 		_max_probe_length = -1;
+		HASHSET_INSTR(
+			_stats.numTombstones = 0;
+			updateLiveStats();
+		);
 	}
 
-	// Make room for this many elements
 	void reserve(size_t num_elems)
 	{
 		size_t required_buckets = num_elems + num_elems/2 + 1;
 		if (required_buckets <= _num_buckets) {
 			return;
 		}
+
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
+
 		size_t num_buckets = 4;
 		while (num_buckets < required_buckets) { num_buckets *= 2; }
 
@@ -472,6 +600,14 @@ public:
 		// DCHECK_EQ_F(old_num_filled, _num_filled);
 		::operator delete(old_states);
 		::operator delete(old_keys);
+
+		HASHSET_INSTR(
+			_stats.rehashes++;
+			_stats.rehashNs += hashInstrGetNs() - t0;
+			_stats.peakMaxProbeLength = std::max(_stats.peakMaxProbeLength, _max_probe_length);
+			_stats.numTombstones = 0;
+			updateLiveStats();
+		);
 	}
 
 	void rehash(size_t num_elems) {
@@ -479,32 +615,51 @@ public:
 	}
 
 private:
-	// Can we fit another element?
 	void check_expand_need()
 	{
 		reserve(_num_filled + 1);
 	}
 
-	// Find the bucket with this key, or return nullptr
 	size_t find_filled_bucket(const KeyT& key) const
 	{
-		if (empty()) { return (size_t)-1; } // Optimization
+		if (empty()) {
+			HASHSET_INSTR(
+				_stats.findMisses++;
+				_stats.probeFindMiss[0]++;
+			);
+			return (size_t)-1;
+		}
 
+		HASHSET_INSTR(auto t0 = hashInstrGetNs());
 		auto hash_value = _hasher(key);
 		for (int offset=0; offset<=_max_probe_length; ++offset) {
 			auto bucket = (hash_value + offset) & _mask;
 			if (_states[bucket] == State::FILLED && _comp(_keys[bucket], key)) {
+				HASHSET_INSTR(
+					_stats.findHits++;
+					_stats.findHitNs += hashInstrGetNs() - t0;
+					_stats.probeFindHit[HashContainerStats::ProbeHistBucket(offset)]++;
+					_stats.peakMaxProbeLength = std::max(_stats.peakMaxProbeLength, _max_probe_length);
+				);
 				return bucket;
 			}
 			if (_states[bucket] == State::INACTIVE) {
-				return (size_t)-1; // End of the chain!
+				HASHSET_INSTR(
+					_stats.findMisses++;
+					_stats.findMissNs += hashInstrGetNs() - t0;
+					_stats.probeFindMiss[HashContainerStats::ProbeHistBucket(offset)]++;
+				);
+				return (size_t)-1;
 			}
 		}
+		HASHSET_INSTR(
+			_stats.findMisses++;
+			_stats.findMissNs += hashInstrGetNs() - t0;
+			_stats.probeFindMiss[HashContainerStats::ProbeHistBucket(_max_probe_length)]++;
+		);
 		return (size_t)-1;
 	}
 
-	// Find the bucket with this key, or return a good empty bucket to place the key in.
-	// In the latter case, the bucket is expected to be filled.
 	size_t find_or_allocate(const KeyT& key)
 	{
 		auto hash_value = _hasher(key);
@@ -515,9 +670,11 @@ private:
 
 			if (_states[bucket] == State::FILLED) {
 				if (_comp(_keys[bucket], key)) {
+					HASHSET_INSTR(_stats.probeInsert[HashContainerStats::ProbeHistBucket(offset)]++);
 					return bucket;
 				}
 			} else if (_states[bucket] == State::INACTIVE) {
+				HASHSET_INSTR(_stats.probeInsert[HashContainerStats::ProbeHistBucket(offset)]++);
 				return bucket;
 			} else {
 				// ACTIVE: keep searching
@@ -527,26 +684,24 @@ private:
 			}
 		}
 
-		// No key found - but maybe a hole for it
-
 		DCHECK_EQ_F(offset, _max_probe_length+1);
 
 		if (hole != (size_t)-1) {
+			HASHSET_INSTR(_stats.probeInsert[HashContainerStats::ProbeHistBucket(offset)]++);
 			return hole;
 		}
 
-		// No hole found within _max_probe_length
 		for (; ; ++offset) {
 			auto bucket = (hash_value + offset) & _mask;
 
 			if (_states[bucket] != State::FILLED) {
 				_max_probe_length = offset;
+				HASHSET_INSTR(_stats.probeInsert[HashContainerStats::ProbeHistBucket(offset)]++);
 				return bucket;
 			}
 		}
 	}
 
-	// key is not in this map. Find a place to put it.
 	size_t find_empty_bucket(const KeyT& key)
 	{
 		auto hash_value = _hasher(key);
@@ -561,6 +716,18 @@ private:
 		}
 		return (size_t(-1));
 	}
+
+#ifdef SPRING_HASH_INSTRUMENTATION
+	void updateLiveStats() const
+	{
+		_stats.numFilled = _num_filled;
+		_stats.numBuckets = _num_buckets;
+	}
+
+public:
+	const HashContainerStats& getStats() const { return _stats; }
+	void setStatsSource(const char* file, int line) { _stats.sourceFile = file; _stats.sourceLine = line; }
+#endif
 
 private:
 	enum class State : uint8_t
@@ -578,7 +745,8 @@ private:
 	size_t  _num_filled       =  0;
 	int     _max_probe_length = -1; // Our longest bucket-brigade is this long. ONLY when we have zero elements is this ever negative (-1).
 	size_t  _mask             =  0;  // _num_buckets minus one
+
+	HASHSET_INSTR(mutable HashContainerStats _stats;)
 };
 
 } // namespace emilib
-

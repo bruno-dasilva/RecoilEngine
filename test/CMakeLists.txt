@@ -595,6 +595,23 @@ endif()
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")
 
 ################################################################################
+### HashContainerStats
+	set(test_name HashContainerStats)
+	set(test_src
+		"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/testHashContainerStats.cpp"
+		"${ENGINE_SOURCE_DIR}/System/HashContainerRegistry.cpp"
+		"${ENGINE_SOURCE_DIR}/System/Misc/SpringTime.cpp"
+		"${ENGINE_SOURCE_DIR}/System/TimeProfiler.cpp"
+		${sources_engine_System_Threading}
+		${test_Common_sources}
+	)
+	set(test_libs
+		${WINMM_LIBRARY}
+	)
+	set(test_flags "-DNOT_USING_CREG -DNOT_USING_STREFLOP -DBUILDING_AI -DSPRING_HASH_INSTRUMENTATION")
+	add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")
+
+################################################################################
 
 
 add_subdirectory(headercheck)

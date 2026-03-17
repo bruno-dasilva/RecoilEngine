@@ -400,6 +400,7 @@ static std::array<int, ThreadPool::MAX_THREADS> lastTempNums;
 void CMoveMath::InitRangeIsBlockedHashes() {
 	for (auto& blockMap : blockMaps) {
 		blockMap.reserve(10);
+		SPRING_TAG_HASH_SOURCE(blockMap);
 	}
 	for (auto& lastTempNum : lastTempNums) {
 		lastTempNum = -1;

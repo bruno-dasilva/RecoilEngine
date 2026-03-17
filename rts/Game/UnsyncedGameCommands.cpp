@@ -102,6 +102,9 @@
 #include "System/GlobalConfig.h"
 #include "System/SafeUtil.h"
 #include "System/TimeProfiler.h"
+#ifdef SPRING_HASH_INSTRUMENTATION
+#include "System/HashContainerRegistry.h"
+#endif
 #include "System/Log/ILog.h"
 #include "System/Config/ConfigHandler.h"
 #include "System/FileSystem/SimpleParser.h"
@@ -3888,8 +3891,17 @@ public:
 			case hashString("cmddescrs"): {
 				commandDescriptionCache.Dump(true);
 			} break;
+#ifdef SPRING_HASH_INSTRUMENTATION
+			case hashString("hashmap"): {
+				HashContainerRegistry::GetInstance().PrintAllStats();
+			} break;
+#endif
 			default: {
-				LOG_L(L_WARNING, "[DbgInfoAction::%s] unknown argument \"%s\" (use \"sound\", \"profiling\", or \"cmddescrs\")", __func__, args.c_str());
+				LOG_L(L_WARNING, "[DbgInfoAction::%s] unknown argument \"%s\" (use \"sound\", \"profiling\", \"cmddescrs\""
+#ifdef SPRING_HASH_INSTRUMENTATION
+					", or \"hashmap\""
+#endif
+					")", __func__, args.c_str());
 			} break;
 		}
 

@@ -116,7 +116,11 @@ private:
 
 	spring::spinlock serverConnMutex;
 
+#ifdef SPRING_HASH_INSTRUMENTATION
+	uint8_t serverConnMem[2048];
+#else
 	uint8_t serverConnMem[1024];
+#endif
 	uint8_t demoRecordMem[ 512];
 
 	netcode::CConnection* serverConnPtr = nullptr;

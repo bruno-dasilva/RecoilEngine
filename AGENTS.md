@@ -28,13 +28,24 @@ docker-build-v2/build.sh linux -DCMAKE_BUILD_TYPE=DEBUG
 mkdir -p build && cd build
 
 # Configure
-cmake ..
+cmake --fresh \
+    -DCMAKE_TOOLCHAIN_FILE="../toolchain/clang_x86_64-pc-linux-gnu.cmake" \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
+    -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
+    -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+    -DCMAKE_COLOR_DIAGNOSTICS=ON \
+    -DAI_TYPES=NATIVE \
+    -DCMAKE_INSTALL_PREFIX="$(dirname $(realpath "$0"))/install" \
+    -G Ninja \
+    ..
 
 # Build specific target
-cmake --build . --target engine-headless -j$(nproc)
+ninja engine-headless
 
 # Build all
-cmake --build . -j$(nproc)
+ninja
 ```
 
 ### Build Types
@@ -61,9 +72,15 @@ The project uses **Catch2** for unit testing. Test files are located in the `tes
 **Build and run all tests:**
 ```bash
 # From build directory
+<<<<<<< Updated upstream
 make tests        # Build all test executables
 make check        # Build and run all tests via CTest
 make test         # Alternative: run via CTest
+=======
+ninja tests        # Build all test executables
+ninja check        # Build and run all tests via CTest
+ninja test         # Alternative: run via CTest
+>>>>>>> Stashed changes
 ```
 
 **Run a single test:**
@@ -388,6 +405,12 @@ The engine uses custom thread pools. See `THREADPOOL` define and related code.
 4. Follow the workflow in `contributing.md`
 5. Disclose any AI assistance used
 
+<<<<<<< Updated upstream
+=======
+### Extra documentation
+Depending on the task, more domain-specific context is useful for coding agents. Consult the @coding-agents/ folder for more documentation.
+
+>>>>>>> Stashed changes
 ## Additional Resources
 
 - Official website: https://recoilengine.org
