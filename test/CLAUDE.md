@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository's test folder.
 
 ## Build & Run Tests
 
@@ -65,11 +65,11 @@ add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")
 |------|---------|
 | `-DUNIT_TEST` | Always set for all tests (global) |
 | `-DSYNCCHECK` | Always set for all tests (global) |
-| `-DNOT_USING_CREG` | Disables CREG serialization system |
-| `-DNOT_USING_STREFLOP` | Disables streflop math library |
-| `-DBUILDING_AI` | AI-specific code paths |
-| `-DTHREADPOOL` | Enables ThreadPool (globally removed, re-enabled per-test) |
-| `-DUNITSYNC` | UnitSync library paths |
+| `-DNOT_USING_CREG` | Stubs out `CR_*` macros. Default unless the test exercises save/load serialization. |
+| `-DNOT_USING_STREFLOP` | Falls back to `<cmath>`. Default unless the test verifies synced floating-point determinism. |
+| `-DBUILDING_AI` | Makes engine headers skip engine-only paths. Pair with `NOT_USING_CREG` and `NOT_USING_STREFLOP`. |
+| `-DTHREADPOOL` | Selects the real thread pool over the stub. Set only when the test needs real parallelism. |
+| `-DUNITSYNC` | Marks the file as part of unitsync. Only needed for tests that link the unitsync library. |
 
 ## Patterns
 
