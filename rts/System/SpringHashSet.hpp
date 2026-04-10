@@ -722,6 +722,7 @@ private:
 	{
 		_stats.numFilled = _num_filled;
 		_stats.numBuckets = _num_buckets;
+		_stats.bucketByteSize = sizeof(KeyT) + sizeof(State);
 	}
 
 public:

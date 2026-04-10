@@ -577,6 +577,16 @@ endif()
 			"${CMAKE_CURRENT_SOURCE_DIR}/lib/catch2/CsvBenchReporter.cpp"
 			${test_Common_sources}
 		)
+	# Pull in instrumentation sources when HASH_INSTRUMENTATION is enabled —
+	# SpringHashMap.hpp references HashContainerRegistry symbols in that mode.
+	if (HASH_INSTRUMENTATION)
+		list(APPEND test_src
+			"${ENGINE_SOURCE_DIR}/System/HashContainerRegistry.cpp"
+			"${ENGINE_SOURCE_DIR}/System/Misc/SpringTime.cpp"
+			"${ENGINE_SOURCE_DIR}/System/TimeProfiler.cpp"
+			${sources_engine_System_Threading}
+		)
+	endif ()
 	set(test_libs "")
 	set(test_flags "-DNOT_USING_CREG -DNOT_USING_STREFLOP -DBUILDING_AI")
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")
@@ -590,6 +600,14 @@ endif()
 			"${CMAKE_CURRENT_SOURCE_DIR}/lib/catch2/CsvBenchReporter.cpp"
 			${test_Common_sources}
 		)
+	if (HASH_INSTRUMENTATION)
+		list(APPEND test_src
+			"${ENGINE_SOURCE_DIR}/System/HashContainerRegistry.cpp"
+			"${ENGINE_SOURCE_DIR}/System/Misc/SpringTime.cpp"
+			"${ENGINE_SOURCE_DIR}/System/TimeProfiler.cpp"
+			${sources_engine_System_Threading}
+		)
+	endif ()
 	set(test_libs "")
 	set(test_flags "-DNOT_USING_CREG -DNOT_USING_STREFLOP -DBUILDING_AI")
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")

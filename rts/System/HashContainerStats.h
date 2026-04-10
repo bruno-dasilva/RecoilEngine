@@ -37,6 +37,7 @@ struct HashContainerStats {
 	size_t numFilled = 0;
 	size_t numBuckets = 0;
 	size_t numTombstones = 0;
+	size_t bucketByteSize = 0; // sizeof(PairT|KeyT) + sizeof(State), set once by container
 
 	static constexpr int ProbeHistBucket(int probeLen)
 	{

@@ -110,6 +110,8 @@ void HashContainerRegistry::PrintAllStats() const
 {
 	std::lock_guard<std::mutex> lock(registryMutex);
 
+	constexpr uint64_t kMinOps = 1000;
+
 	// sort by bucket count (memory footprint) descending
 	std::vector<const HashContainerStats*> sorted(containers.begin(), containers.end());
 	std::sort(sorted.begin(), sorted.end(), [](const HashContainerStats* a, const HashContainerStats* b) {
@@ -118,19 +120,25 @@ void HashContainerRegistry::PrintAllStats() const
 
 	size_t numActive = 0;
 	size_t numSkipped = 0;
+	double totalActiveMB = 0.0;
+
+	auto bytesToMB = [](size_t bytes) { return bytes / (1024.0 * 1024.0); };
 
 	LOG("[HashContainerStats] %zu instrumented containers", containers.size());
-	LOG("%-65s | %-50s | %7s | %7s | %5s | %5s | %12s | %12s | %8s | %6s | %6s | %4s | %4s | probes",
-		"type", "source", "size", "buckets", "load", "tomb", "find-hit", "find-miss", "inserts", "erases", "iters", "rh", "maxP");
-	LOG("%142s 1|2|3|4-7|8-15|16+  \xe2\x96\x91=1-10%% \xe2\x96\x92=10-30%% \xe2\x96\x93=30-55%% \xe2\x96\x88=55%%+", "");
+	LOG("%-90s | %-50s | %7s | %7s | %7s | %5s | %5s | %12s | %12s | %8s | %6s | %6s | %4s | %4s | probes",
+		"type", "source", "size", "buckets", "mem MB", "load", "tomb", "find-hit", "find-miss", "inserts", "erases", "iters", "rh", "maxP");
+	LOG("%175s 1|2|3|4-7|8-15|16+  \xe2\x96\x91=1-10%% \xe2\x96\x92=10-30%% \xe2\x96\x93=30-55%% \xe2\x96\x88=55%%+", "");
 
 	for (const auto* stats : sorted) {
 		const uint64_t totalOps = stats->findHits + stats->findMisses + stats->inserts + stats->erases;
-		if (totalOps < 100) {
+		if (totalOps < kMinOps) {
 			numSkipped++;
 			continue;
 		}
 		numActive++;
+
+		const double memMB = bytesToMB(stats->bucketByteSize * stats->numBuckets);
+		totalActiveMB += memMB;
 
 		const float loadPct = (stats->numBuckets > 0) ? (100.0f * stats->numFilled / stats->numBuckets) : 0.0f;
 		const float tombPct = (stats->numBuckets > 0) ? (100.0f * stats->numTombstones / stats->numBuckets) : 0.0f;
@@ -153,7 +161,7 @@ void HashContainerRegistry::PrintAllStats() const
 			snprintf(srcBuf, sizeof(srcBuf), "<unknown>");
 		}
 
-		char typeBuf[80];
+		char typeBuf[128];
 		FormatShortTypeName(typeBuf, sizeof(typeBuf), stats->typeName);
 
 		// sparkline probe histogram [1|2|3|4-7|8-15|16+]
@@ -178,11 +186,12 @@ void HashContainerRegistry::PrintAllStats() const
 			*p = '\0';
 		}
 
-		LOG("%-65s | %-50s | %7zu | %7zu | %4.1f%% | %4.1f%% | %12llu | %12llu | %8llu | %6llu | %6llu | %4llu | %4d | %s",
+		LOG("%-90s | %-50s | %7zu | %7zu | %7.2f | %4.1f%% | %4.1f%% | %12llu | %12llu | %8llu | %6llu | %6llu | %4llu | %4d | %s",
 			typeBuf,
 			srcBuf,
 			stats->numFilled,
 			stats->numBuckets,
+			memMB,
 			loadPct,
 			tombPct,
 			(unsigned long long)stats->findHits,
@@ -196,7 +205,8 @@ void HashContainerRegistry::PrintAllStats() const
 		);
 	}
 
-	LOG("[HashContainerStats] %zu active, %zu skipped (<100 ops)", numActive, numSkipped);
+	LOG("[HashContainerStats] %zu active, %zu skipped (<%llu ops), total allocated: %.2f MB",
+		numActive, numSkipped, (unsigned long long)kMinOps, totalActiveMB);
 
 	// top 20 containers by total time, with ns/op breakdown
 	{
@@ -209,16 +219,17 @@ void HashContainerRegistry::PrintAllStats() const
 
 		LOG("");
 		LOG("[HashContainerStats] Top 20 containers by total time (ns/op):");
-		LOG("  %-50s | %-40s | %9s | %10s | %10s | %10s | %10s | %10s",
-			"type", "source", "total-ms", "find-hit", "find-miss", "insert", "erase", "rehash");
+		LOG("  %-80s | %-55s | %9s | %7s | %10s | %10s | %10s | %10s | %10s",
+			"type", "source", "total-ms", "mem MB", "find-hit", "find-miss", "insert", "erase", "rehash");
 
 		const size_t limit = std::min(byTime.size(), size_t{20});
+		double top20TotalMB = 0.0;
 		for (size_t i = 0; i < limit; ++i) {
 			const auto* s = byTime[i];
 			const int64_t totalNs = s->findHitNs + s->findMissNs + s->insertNs + s->eraseNs + s->rehashNs;
 			if (totalNs == 0) break;
 
-			char typeBuf[80];
+			char typeBuf[128];
 			FormatShortTypeName(typeBuf, sizeof(typeBuf), s->typeName);
 
 			char srcBuf[80];
@@ -245,10 +256,13 @@ void HashContainerRegistry::PrintAllStats() const
 			if (s->erases     > 0) snprintf(erBuf, sizeof(erBuf), "%llu", (unsigned long long)(s->eraseNs    / s->erases));     else snprintf(erBuf, sizeof(erBuf), "-");
 			if (s->rehashes   > 0) snprintf(rhBuf, sizeof(rhBuf), "%llu", (unsigned long long)(s->rehashNs   / s->rehashes));   else snprintf(rhBuf, sizeof(rhBuf), "-");
 
-			LOG("  %-50s | %-40s | %8.2fms | %10s | %10s | %10s | %10s | %10s",
-				typeBuf, srcBuf, totalNs / 1e6,
+			const double sMemMB = bytesToMB(s->bucketByteSize * s->numBuckets);
+			top20TotalMB += sMemMB;
+			LOG("  %-80s | %-55s | %8.2fms | %7.2f | %10s | %10s | %10s | %10s | %10s",
+				typeBuf, srcBuf, totalNs / 1e6, sMemMB,
 				fhBuf, fmBuf, inBuf, erBuf, rhBuf);
 		}
+		LOG("[HashContainerStats] top-20 total allocated: %.2f MB", top20TotalMB);
 	}
 
 	// aggregated stats grouped by type
@@ -263,10 +277,14 @@ void HashContainerRegistry::PrintAllStats() const
 			int64_t findHitNs = 0, findMissNs = 0;
 			int64_t insertNs = 0, eraseNs = 0, rehashNs = 0;
 			int peakMaxProbeLength = 0;
+			double totalMB = 0.0;
 		};
 
 		std::map<const char*, TypeAgg> byType;
 		for (const auto* stats : containers) {
+			const uint64_t totalOps = stats->findHits + stats->findMisses + stats->inserts + stats->erases;
+			if (totalOps < kMinOps)
+				continue;
 			auto& agg = byType[stats->typeName];
 			agg.count++;
 			agg.totalFilled += stats->numFilled;
@@ -284,6 +302,7 @@ void HashContainerRegistry::PrintAllStats() const
 			agg.eraseNs += stats->eraseNs;
 			agg.rehashNs += stats->rehashNs;
 			agg.peakMaxProbeLength = std::max(agg.peakMaxProbeLength, stats->peakMaxProbeLength);
+			agg.totalMB += bytesToMB(stats->bucketByteSize * stats->numBuckets);
 		}
 
 		// sort by total ops descending
@@ -299,29 +318,36 @@ void HashContainerRegistry::PrintAllStats() const
 
 		LOG("");
 		LOG("[HashContainerStats] Aggregated by type (%zu types):", sortedTypes.size());
-		LOG("  %-65s | %5s | %8s | %12s | %12s | %10s | %8s | %6s | %9s | %9s",
-			"type", "count", "size", "find-hit", "find-miss", "inserts", "erases", "iters", "find-ms", "insert-ms");
+		LOG("  %-90s | %5s | %8s | %7s | %12s | %12s | %10s | %8s | %6s | %10s | %10s | %10s",
+			"type", "count", "size", "mem MB", "find-hit", "find-miss", "inserts", "erases", "iters", "find-ms", "insert-ms", "total-ms");
 
+		double byTypeTotalMB = 0.0;
 		for (const auto& [key, agg] : sortedTypes) {
 			const uint64_t totalOps = agg->findHits + agg->findMisses + agg->inserts + agg->erases + agg->iterations;
-			if (totalOps < 100) continue;
+			if (totalOps < kMinOps) continue;
 
-			char typeBuf[80];
+			char typeBuf[128];
 			FormatShortTypeName(typeBuf, sizeof(typeBuf), key);
 
-			LOG("  %-65s | %5zu | %8zu | %12llu | %12llu | %10llu | %8llu | %6llu | %8.1fms | %8.1fms",
+			const double totalMs = (agg->findHitNs + agg->findMissNs + agg->insertNs + agg->eraseNs + agg->rehashNs) / 1e6;
+			byTypeTotalMB += agg->totalMB;
+
+			LOG("  %-90s | %5zu | %8zu | %7.2f | %12llu | %12llu | %10llu | %8llu | %6llu | %8.1fms | %8.1fms | %8.1fms",
 				typeBuf,
 				agg->count,
 				agg->totalFilled,
+				agg->totalMB,
 				(unsigned long long)agg->findHits,
 				(unsigned long long)agg->findMisses,
 				(unsigned long long)agg->inserts,
 				(unsigned long long)agg->erases,
 				(unsigned long long)agg->iterations,
 				(agg->findHitNs + agg->findMissNs) / 1e6,
-				agg->insertNs / 1e6
+				agg->insertNs / 1e6,
+				totalMs
 			);
 		}
+		LOG("[HashContainerStats] total allocated (by type): %.2f MB", byTypeTotalMB);
 	}
 
 	// print aggregate timing summary
@@ -332,6 +358,9 @@ void HashContainerRegistry::PrintAllStats() const
 	uint64_t totalIterations = 0;
 
 	for (const auto* stats : containers) {
+		const uint64_t totalOps = stats->findHits + stats->findMisses + stats->inserts + stats->erases;
+		if (totalOps < kMinOps)
+			continue;
 		totalFindHitNs += stats->findHitNs;
 		totalFindMissNs += stats->findMissNs;
 		totalInsertNs += stats->insertNs;

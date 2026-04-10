@@ -72,15 +72,9 @@ The project uses **Catch2** for unit testing. Test files are located in the `tes
 **Build and run all tests:**
 ```bash
 # From build directory
-<<<<<<< Updated upstream
-make tests        # Build all test executables
-make check        # Build and run all tests via CTest
-make test         # Alternative: run via CTest
-=======
 ninja tests        # Build all test executables
 ninja check        # Build and run all tests via CTest
 ninja test         # Alternative: run via CTest
->>>>>>> Stashed changes
 ```
 
 **Run a single test:**
@@ -405,12 +399,9 @@ The engine uses custom thread pools. See `THREADPOOL` define and related code.
 4. Follow the workflow in `contributing.md`
 5. Disclose any AI assistance used
 
-<<<<<<< Updated upstream
-=======
 ### Extra documentation
 Depending on the task, more domain-specific context is useful for coding agents. Consult the @coding-agents/ folder for more documentation.
 
->>>>>>> Stashed changes
 ## Additional Resources
 
 - Official website: https://recoilengine.org

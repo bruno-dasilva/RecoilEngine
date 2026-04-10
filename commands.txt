@@ -1,0 +1,30 @@
+PRD_RAPID_USE_STREAMER=false PRD_RAPID_REPO_MASTER=https://repos-cdn.beyondallreason.dev/repos.gz PRD_HTTP_SEARCH_URL=https://files-cdn.beyondallreason.dev/find ./tools/pr-downloader/src/pr-downloader --filesystem-writepath /www/projects/bar-data/ --download-game 'Beyond All Reason test-28409-df318ab' 
+
+
+cmake --fresh \
+	-DCMAKE_TOOLCHAIN_FILE="../toolchain/clang_x86_64-pc-linux-gnu.cmake" \
+	-DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+	-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+	-DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
+	-DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
+	-DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+	-DCMAKE_COLOR_DIAGNOSTICS=ON \
+	-DAI_TYPES=NATIVE \
+	-DCMAKE_INSTALL_PREFIX="$(dirname $(realpath "$0"))/install" \
+	-G Ninja \
+	..
+
+
+cmake --fresh \
+	-DCMAKE_TOOLCHAIN_FILE="../toolchain/mull-clang_x86_64-pc-linux-gnu.cmake" \
+	-DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+	-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+	-DCMAKE_CXX_FLAGS_DEBUG="-O0 -g" \
+	-DCMAKE_C_FLAGS_DEBUG="-O0 -g" \
+	-DCMAKE_BUILD_TYPE=DEBUG \
+	-DCMAKE_COLOR_DIAGNOSTICS=ON \
+	-DDEBUG_MAX_WARNINGS=OFF \
+	-DAI_TYPES=NATIVE \
+	-DCMAKE_INSTALL_PREFIX="$(dirname $(realpath "$0"))/install" \
+	-G Ninja \
+	..
