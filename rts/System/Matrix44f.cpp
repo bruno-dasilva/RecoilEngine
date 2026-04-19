@@ -349,10 +349,10 @@ static inline void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44
     // Broadcast each scalar using shuffle (SSE1, but now from register not memory)
     #define SPLAT(v, i) _mm_shuffle_ps(v, v, _MM_SHUFFLE(i,i,i,i))
 
-    __m128 moutc1 =                     _mm_mul_ps(m1c1, SPLAT(m2r0, 0));
-    __m128 moutc2 =                     _mm_mul_ps(m1c1, SPLAT(m2r1, 0));
-    __m128 moutc3 =                     _mm_mul_ps(m1c1, SPLAT(m2r2, 0));
-    __m128 moutc4 =                     _mm_mul_ps(m1c1, SPLAT(m2r3, 0));
+    __m128 moutc1 = _mm_mul_ps(m1c1, SPLAT(m2r0, 0));
+    __m128 moutc2 = _mm_mul_ps(m1c1, SPLAT(m2r1, 0));
+    __m128 moutc3 = _mm_mul_ps(m1c1, SPLAT(m2r2, 0));
+    __m128 moutc4 = _mm_mul_ps(m1c1, SPLAT(m2r3, 0));
 
     moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c2, SPLAT(m2r0, 1)));
     moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c2, SPLAT(m2r1, 1)));
