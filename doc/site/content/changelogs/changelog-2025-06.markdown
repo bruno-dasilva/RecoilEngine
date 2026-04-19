@@ -34,6 +34,8 @@ This is the changelog since version 2025.04 until **version 2025.06.21**, which 
 - `Spring.ShareTeamResource` no longer triggers `gadget:AllowResourceTransfer `, call it manually if needed.
 - rmlUI textures use nearest pixel filtering instead of linear. The intended effect is crisper text with anti-aliasing.
 - `Spring.SetProjectileTarget` now errors on invalid args instead of silently ignoring.
+- the `smokePeriod` weapon def tag defaults: 8 → 1.
+- setting weapon def `stockpileTime` to negatives no longer allowed.
 - fully removed support for 32-bit builds.
 
 ### Deprecation notice
@@ -208,6 +210,10 @@ Note that this is a single scalar value (you cannot scale in one dimension).
 - `BeamLaser` and `LightningCannon` now have a proper effective range with a non-default value of `targetBorder` tag.
 - projectiles colliding with near-vertical cliffs now spawn explosions at the place of collision rather than at the top of the cliff. Applies to all weapon types except DGun.
 
+### Stockpile
+- setting weapon def `stockpileTime` to 0 now prevents progress. Use for a Lua reimplementation.
+- setting weapon def `stockpileTime` to negatives no longer allowed.
+
 ### Modrules for Guard behaviour
 
 Added a bunch of modrules allowing to configure how units with the Guard command move in relation to their guardee.
@@ -233,8 +239,12 @@ Added a bunch of modrules allowing to configure how units with the Guard command
 - add a second bool arg and an optional second return value to `Spring.GetGroundDecalTextures(bool? mainTex, bool? alsoFilenames = false) → string[] textures, string[]? filenames`.
 
 ### Misc
+- `widget:Update(dt)` now receives `dt`.
+- add `Spring.GetUnitMoveDefID(unitID) → number|bool moveDefID, string? name`. Returns `false, nil` when the unit is valid but has no movedef (aircraft or building); otherwise a numerical ID and a name.
 - add `Spring.GetPieceProjectileName(pieceProjectileID) -> string name`. Returns the name of the source piece for a piece projectile ("body", "turret" etc). Nil for non-piece projectiles.
+- add optional 4th boolean arg to `Spring.UnitAttach`, setting it to true causes the attach to ignore transport rules and forces it.
 - add `Spring.GetAllProjectiles(bool excludeWeaponProjs = false, bool excludeWeaponProjs = false) -> { proID, proID, ...}`.
+- add `Spring.SetFeaturePieceMatrix(featureID, m11, m12, ..., m44)`, similar to the existing one for units.
 - removed the 10 mutator limit, can now have arbitrarily many.
 - Lua shader files (i.e. any `foo.lua` loaded directly by engine for shader purposes) now have access to unsynced `VFS` functions.
 - add `accurateLeading` numerical unit weapon tag (note, not weaponDef). Controls how many extra accuracy iterations are done when calculating shots.
@@ -268,10 +278,12 @@ Value of 1 does DWMFlush before SwapBuffers, value of 2 does DWMFlush after swap
 - `Spring.GetTeamList(allyTeamID?)` no longer crashes if it receives 2+ args (but still ignores them, you can't get the combined team list of multiple allyteams).
 - added `GL.TEXTURE_2D_ARRAY` Lua constant.
 - `Spring.SetProjectileTarget` now errors on invalid args.
+- the `smokePeriod` weapon def tag defaults: 8 → 1.
 
 ## Fixes
 
 - fix the "no sound when removing bluetooth headphones" issue.
+- fix multiple QTPFS desyncs.
 - fix texture overrides for tex1 and tex2 for GLTF models not being read from `*.gltf.lua` metafile.
 - maybe fixed a rare bug of using an incorrect parser for model assets.
 - fix incorrect number of CPUs being detected on Linux with offline CPUs.
