@@ -329,7 +329,7 @@ CMatrix44f& CMatrix44f::Translate(const float x, const float y, const float z)
 
 
 __FORCE_ALIGN_STACK__
-static inline void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
+void MatrixMatrixMultiplySSEOld(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
 {
 	//alignof guarantees 16 byte alignment required by SSE2
 	const __m128 m1c1 = _mm_load_ps(&m1.md[0][0]);
@@ -386,6 +386,56 @@ static inline void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44
 	_mm_store_ps(&mout->md[3][0], moutc4);
 }
 
+__FORCE_ALIGN_STACK__
+void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
+{
+    const __m128 m1c1 = _mm_load_ps(&m1.md[0][0]);
+    const __m128 m1c2 = _mm_load_ps(&m1.md[1][0]);
+    const __m128 m1c3 = _mm_load_ps(&m1.md[2][0]);
+    const __m128 m1c4 = _mm_load_ps(&m1.md[3][0]);
+
+	// an optimization we assume
+	assert(m2.m[3] == 0.0f);
+	assert(m2.m[7] == 0.0f);
+	// assert(m2.m[11] == 0.0f); in case of a gluPerspective it's -1
+
+    // Load each row of m2 as a full vector, then use _mm_shuffle_ps to broadcast
+    // each element — avoids 12 separate scalar loads with _mm_load1_ps
+    const __m128 m2r0 = _mm_load_ps(&m2.m[0]);   // [m00, m01, m02, m03=0]
+    const __m128 m2r1 = _mm_load_ps(&m2.m[4]);   // [m10, m11, m12, m13=0]
+    const __m128 m2r2 = _mm_load_ps(&m2.m[8]);   // [m20, m21, m22, m23]
+    const __m128 m2r3 = _mm_load_ps(&m2.m[12]);  // [m30, m31, m32, m33]
+
+    // Broadcast each scalar using shuffle (SSE1, but now from register not memory)
+    #define SPLAT(v, i) _mm_shuffle_ps(v, v, _MM_SHUFFLE(i,i,i,i))
+
+    __m128 moutc1 =                     _mm_mul_ps(m1c1, SPLAT(m2r0, 0));
+    __m128 moutc2 =                     _mm_mul_ps(m1c1, SPLAT(m2r1, 0));
+    __m128 moutc3 =                     _mm_mul_ps(m1c1, SPLAT(m2r2, 0));
+    __m128 moutc4 =                     _mm_mul_ps(m1c1, SPLAT(m2r3, 0));
+
+    moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c2, SPLAT(m2r0, 1)));
+    moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c2, SPLAT(m2r1, 1)));
+    moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c2, SPLAT(m2r2, 1)));
+    moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c2, SPLAT(m2r3, 1)));
+
+    moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c3, SPLAT(m2r0, 2)));
+    moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c3, SPLAT(m2r1, 2)));
+    moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c3, SPLAT(m2r2, 2)));
+    moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c3, SPLAT(m2r3, 2)));
+
+    // m2.m[3] and m2.m[7] are zero — skip those terms
+    moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c4, SPLAT(m2r2, 3)));
+    moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c4, SPLAT(m2r3, 3)));
+
+    #undef SPLAT
+
+    _mm_store_ps(&mout->md[0][0], moutc1);
+    _mm_store_ps(&mout->md[1][0], moutc2);
+    _mm_store_ps(&mout->md[2][0], moutc3);
+    _mm_store_ps(&mout->md[3][0], moutc4);
+}
+
 bool CMatrix44f::equals(const CMatrix44f& rhs) const
 {
 	return
@@ -416,7 +466,7 @@ bool CMatrix44f::operator==(const CMatrix44f& rhs) const
 CMatrix44f CMatrix44f::operator* (const CMatrix44f& m2) const
 {
 	CMatrix44f mout;
-	MatrixMatrixMultiplySSE(*this, m2, &mout);
+	::MatrixMatrixMultiplySSE(*this, m2, &mout);
 	return mout;
 }
 

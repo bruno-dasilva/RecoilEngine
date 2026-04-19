@@ -182,6 +182,9 @@ public:
 	}
 };
 
+// SSE matrix multiplication - static in implementation
+void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout);
+
 
 // Templates for simple 2D/3D matrixes that behave
 // pretty much like statically allocated matrixes,
