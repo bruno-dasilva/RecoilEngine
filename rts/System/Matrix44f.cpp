@@ -326,68 +326,8 @@ CMatrix44f& CMatrix44f::Translate(const float x, const float y, const float z)
 	return *this;
 }
 
-
-
 __FORCE_ALIGN_STACK__
-void MatrixMatrixMultiplySSEOld(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
-{
-	//alignof guarantees 16 byte alignment required by SSE2
-	const __m128 m1c1 = _mm_load_ps(&m1.md[0][0]);
-	const __m128 m1c2 = _mm_load_ps(&m1.md[1][0]);
-	const __m128 m1c3 = _mm_load_ps(&m1.md[2][0]);
-	const __m128 m1c4 = _mm_load_ps(&m1.md[3][0]);
-
-	// an optimization we assume
-	assert(m2.m[3] == 0.0f);
-	assert(m2.m[7] == 0.0f);
-	// assert(m2.m[11] == 0.0f); in case of a gluPerspective it's -1
-
-	const __m128 m2i0 = _mm_load1_ps(&m2.m[0]);
-	const __m128 m2i1 = _mm_load1_ps(&m2.m[1]);
-	const __m128 m2i2 = _mm_load1_ps(&m2.m[2]);
-	//const __m128 m2i3 = _mm_load1_ps(&m2.m[3]);
-	const __m128 m2i4 = _mm_load1_ps(&m2.m[4]);
-	const __m128 m2i5 = _mm_load1_ps(&m2.m[5]);
-	const __m128 m2i6 = _mm_load1_ps(&m2.m[6]);
-	//const __m128 m2i7 = _mm_load1_ps(&m2.m[7]);
-	const __m128 m2i8 = _mm_load1_ps(&m2.m[8]);
-	const __m128 m2i9 = _mm_load1_ps(&m2.m[9]);
-	const __m128 m2i10 = _mm_load1_ps(&m2.m[10]);
-	const __m128 m2i11 = _mm_load1_ps(&m2.m[11]);
-	const __m128 m2i12 = _mm_load1_ps(&m2.m[12]);
-	const __m128 m2i13 = _mm_load1_ps(&m2.m[13]);
-	const __m128 m2i14 = _mm_load1_ps(&m2.m[14]);
-	const __m128 m2i15 = _mm_load1_ps(&m2.m[15]);
-
-	__m128 moutc1, moutc2, moutc3, moutc4;
-	moutc1 =                    _mm_mul_ps(m1c1, m2i0);
-	moutc2 =                    _mm_mul_ps(m1c1, m2i4);
-	moutc3 =                    _mm_mul_ps(m1c1, m2i8);
-	moutc4 =                    _mm_mul_ps(m1c1, m2i12);
-
-	moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c2, m2i1));
-	moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c2, m2i5));
-	moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c2, m2i9));
-	moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c2, m2i13));
-
-	moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c3, m2i2));
-	moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c3, m2i6));
-	moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c3, m2i10));
-	moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c3, m2i14));
-
-	//moutc1 = _mm_add_ps(moutc1, _mm_mul_ps(m1c4, _mm_load1_ps(&m2.m[3])));
-	//moutc2 = _mm_add_ps(moutc2, _mm_mul_ps(m1c4, _mm_load1_ps(&m2.m[7])));
-	moutc3 = _mm_add_ps(moutc3, _mm_mul_ps(m1c4, m2i11));
-	moutc4 = _mm_add_ps(moutc4, _mm_mul_ps(m1c4, m2i15));
-
-	_mm_store_ps(&mout->md[0][0], moutc1);
-	_mm_store_ps(&mout->md[1][0], moutc2);
-	_mm_store_ps(&mout->md[2][0], moutc3);
-	_mm_store_ps(&mout->md[3][0], moutc4);
-}
-
-__FORCE_ALIGN_STACK__
-void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
+static inline void MatrixMatrixMultiplySSE(const CMatrix44f& m1, const CMatrix44f& m2, CMatrix44f* mout)
 {
     const __m128 m1c1 = _mm_load_ps(&m1.md[0][0]);
     const __m128 m1c2 = _mm_load_ps(&m1.md[1][0]);
