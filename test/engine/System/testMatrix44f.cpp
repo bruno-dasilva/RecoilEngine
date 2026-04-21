@@ -205,38 +205,14 @@ _noinline static int TestMMSpring2()
 
 _noinline static int TestMMSSE()
 {
-    ScopedOnceTimer timer("Matrix-Matrix-Mult: sse");
-    CMatrix44f m1(m_);
-    for (int i = 0; i < testRuns; ++i) {
-        MatrixMatrixMultiplySSEOld(&m1, m);
-    }
-    return spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
+	ScopedOnceTimer timer("Matrix-Matrix-Mult: sse");
+	CMatrix44f m1(m_);
+	for (int i = 0; i < testRuns; ++i) {
+		MatrixMatrixMultiplySSEOld(&m1, m);
+	}
+	return spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
 }
 
-_noinline static int TestMMSSENew()
-{
-    ScopedOnceTimer timer("Matrix-Matrix-Mult: sse_new");
-    CMatrix44f m1(m_);
-    for (int i = 0; i < testRuns; ++i) {
-        m1 = m1 * m;  // uses MatrixMatrixMultiplySSE (SSENew)
-    }
-    return spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
-}
-
-_noinline static int TestMMSSEOldVsSSENew()
-{
-    // Test that SSEOld and SSENew produce identical results
-    CMatrix44f m1(m_);
-    CMatrix44f m2(m_);
-    MatrixMatrixMultiplySSEOld(&m1, m);  // uses old
-    m2 = m2 * m;                    // uses new (operator*)
-
-    // They should be bitwise identical
-    if (!(m1 == m2)) {
-        return 0; // Different hash to indicate failure
-    }
-    return spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
-}
 
 _noinline static int TestSpring()
 {
@@ -306,97 +282,90 @@ TEST_CASE("Matrix44VectorMultiply")
 
 TEST_CASE("Matrix44MatrixMultiply")
 {
-    for (int i = 0; i < 16; ++i) {
-        if ((i != 7) && (i != 3)) {
-            m[i] = float(i + 1) / 31.3125f;
-        } else {
-            m[i] = 0.0f;
-        }
-    }
+	for (int i = 0; i < 16; ++i) {
+		if ((i != 7) && (i != 3)) {
+			m[i] = float(i + 1) / 31.3125f;
+		} else {
+			m[i] = 0.0f;
+		}
+	}
 }
 
 TEST_CASE("Matrix44MatrixMultiplySSE")
 {
-    // Initialize matrices with same values as in Matrix44MatrixMultiply
-    for (int i = 0; i < 16; ++i) {
-        if ((i != 7) && (i != 3)) {
-            m[i] = float(i + 1) / 31.3125f;
-            m_[i] = float(i + 1) / 31.3125f;
-        } else {
-            m[i] = 0.0f;
-            m_[i] = 0.0f;
-        }
-    }
+	for (int i = 0; i < 16; ++i) {
+		if ((i != 7) && (i != 3)) {
+			m[i] = float(i + 1) / 31.3125f;
+			m_[i] = float(i + 1) / 31.3125f;
+		} else {
+			m[i] = 0.0f;
+			m_[i] = 0.0f;
+		}
+	}
 
-    ScopedOnceTimer timer("Matrix-Matrix-Mult: sse");
-    CMatrix44f m1(m_);
-    for (int i = 0; i < testRuns; ++i) {
-        MatrixMatrixMultiplySSEOld(&m1, m);
-    }
-    spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
+	ScopedOnceTimer timer("Matrix-Matrix-Mult: sse");
+	CMatrix44f m1(m_);
+	for (int i = 0; i < testRuns; ++i) {
+		MatrixMatrixMultiplySSEOld(&m1, m);
+	}
+	spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
 
-    spring_clock::PopTickRate();
+	spring_clock::PopTickRate();
 }
 
 TEST_CASE("Matrix44MatrixMultiplySSEOldVsSSENew")
 {
-    // Test with 100k random matrices ensuring affine assumptions (m2.m[3]=0, m2.m[7]=0)
-    const int numTests = 100000;
-    bool allMatch = true;
-    std::mt19937 rng(12345);
-    std::uniform_real_distribution<float> dist(-10.0f, 10.0f);
+	const int numTests = 100000;
+	bool allMatch = true;
+	std::mt19937 rng(12345);
+	std::uniform_real_distribution<float> dist(-10.0f, 10.0f);
 
-    for (int t = 0; t < numTests; ++t) {
-        // m1: any values
-        for (int i = 0; i < 16; ++i) {
-            m[i] = dist(rng);
-        }
+	for (int t = 0; t < numTests; ++t) {
+		for (int i = 0; i < 16; ++i) {
+			m[i] = dist(rng);
+		}
 
-        // m2: affine transform (ensures m[3]=0 and m[7]=0 for the optimization)
-        for (int i = 0; i < 16; ++i) {
-            if (i == 3 || i == 7) {
-                m_[i] = 0.0f;
-            } else {
-                m_[i] = dist(rng);
-            }
-        }
+		for (int i = 0; i < 16; ++i) {
+			if (i == 3 || i == 7) {
+				m_[i] = 0.0f;
+			} else {
+				m_[i] = dist(rng);
+			}
+		}
 
-        // Verify assumptions for the optimization
-        assert(m_[3] == 0.0f);
-        assert(m_[7] == 0.0f);
+		assert(m_[3] == 0.0f);
+		assert(m_[7] == 0.0f);
 
-        // operator* uses new SSENew, MatrixMatrixMultiplySSEOld uses the old implementation
-        CMatrix44f resultNew = m * m_;         // calls MatrixMatrixMultiplySSE
-        MatrixMatrixMultiplySSEOld(&m, m_);  // modifies m in-place with old implementation
+		CMatrix44f resultNew = m * m_;
+		MatrixMatrixMultiplySSEOld(&m, m_);
 
-        if (!(m == resultNew)) {
-            allMatch = false;
-            break;
-        }
-    }
+		if (!(m == resultNew)) {
+			allMatch = false;
+			break;
+		}
+	}
 
-    CHECK(allMatch == true);
+	CHECK(allMatch == true);
 }
 
 TEST_CASE("Matrix44MatrixMultiplySSE_Opt")
 {
-    // Initialize matrices with same values as in Matrix44MatrixMultiply
-    for (int i = 0; i < 16; ++i) {
-        if ((i != 7) && (i != 3)) {
-            m[i] = float(i + 1) / 31.3125f;
-            m_[i] = float(i + 1) / 31.3125f;
-        } else {
-            m[i] = 0.0f;
-            m_[i] = 0.0f;
-        }
-    }
+	for (int i = 0; i < 16; ++i) {
+		if ((i != 7) && (i != 3)) {
+			m[i] = float(i + 1) / 31.3125f;
+			m_[i] = float(i + 1) / 31.3125f;
+		} else {
+			m[i] = 0.0f;
+			m_[i] = 0.0f;
+		}
+	}
 
-    ScopedOnceTimer timer("Matrix-Matrix-Mult: sse_new");
-    CMatrix44f m1(m_);
-    for (int i = 0; i < testRuns; ++i) {
-        m1 = m * m_;  // uses MatrixMatrixMultiplySSE (SSENew)
-    }
-    spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
+	ScopedOnceTimer timer("Matrix-Matrix-Mult: sse_new");
+	CMatrix44f m1(m_);
+	for (int i = 0; i < testRuns; ++i) {
+		m1 = m1 * m_;
+	}
+	spring::LiteHash(&m1, sizeof(CMatrix44f), 0);
 
-    spring_clock::PopTickRate();
+	spring_clock::PopTickRate();
 }
