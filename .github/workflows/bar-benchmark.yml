@@ -246,7 +246,15 @@ jobs:
               ? `♻️ reused prior runs: ${cachedLegs.join(" · ")}`
               : `♻️ no cache hits — all legs ran fresh`;
 
+            // Hidden marker used to locate a prior bar-benchmark comment
+            // on this PR so we update it in place instead of posting a
+            // new one on every workflow re-trigger. HTML comments don't
+            // render in markdown but are visible to listComments().
+            const MARKER = "<!-- bar-benchmark:comment -->";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
             const body = [
+              MARKER,
               `### bar-benchmark — PR #${{ needs.resolve.outputs.pr }}`,
               ``,
               `candidate \`${candSha.slice(0,7)}\` vs baseline \`${baseSha.slice(0,7)}\``,
@@ -263,11 +271,39 @@ jobs:
               ``,
               `<sub>candidate jobs: ${candJobs.map(j => `\`${j}\``).join(' · ')}</sub>`,
               `<sub>baseline jobs: ${baseJobs.map(j => `\`${j}\``).join(' · ')}</sub>`,
+              ``,
+              `<sub>last updated: ${new Date().toISOString()} · [workflow run](${runUrl})</sub>`,
             ].join("\n");
 
-            await github.rest.issues.createComment({
-              issue_number: ${{ needs.resolve.outputs.pr }},
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body,
-            });
+            // Find-or-update: locate any prior bar-benchmark comment on
+            // this PR via the hidden marker and mutate it in place.
+            // Falls back to createComment on the very first run.
+            const issueNumber = ${{ needs.resolve.outputs.pr }};
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              },
+            );
+            const prior = existing.find(c => c.body && c.body.includes(MARKER));
+
+            if (prior) {
+              core.info(`updating existing comment ${prior.id}`);
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body,
+              });
+            } else {
+              core.info("no prior bar-benchmark comment found — creating a new one");
+              await github.rest.issues.createComment({
+                issue_number: issueNumber,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
