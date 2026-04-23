@@ -90,7 +90,7 @@ jobs:
           workload_identity_provider: ${{ vars.BENCHMARKS_IDENTITY_PROVIDER }}
           service_account: ${{ vars.BENCHMARKS_OPERATOR_SA }}
 
-      - uses: beyond-all-reason/bar-benchmarks@v1
+      - uses: bruno-dasilva/bar-benchmarks@master
         id: bench
         with:
           engine-commit: ${{ steps.pick.outputs.sha }}
