@@ -121,13 +121,18 @@ jobs:
           if [ "${CACHED}" = "true" ]; then
             echo "::notice title=cache hit::${{ matrix.variant }} / ${{ matrix.case.scenario }} reused a prior run"
           fi
+          # summary.json drives the candidate/baseline cells + footer.
           jq --arg variant  "${{ matrix.variant }}" \
              --arg scenario "${{ matrix.case.scenario }}" \
              --arg map      "${{ matrix.case.map }}" \
              --arg sha      "${{ steps.pick.outputs.sha }}" \
              --argjson cached "$( [ "${CACHED}" = "true" ] && echo true || echo false )" \
-             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, median: .sim_mean_ms_median, stddev: .sim_mean_ms_stddev, valid, invalid}' \
+             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, valid, invalid}' \
             "${{ steps.bench.outputs.report-json-path }}" > "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-summary.json"
+          # Full BatchReport — fed to `bar-bench compare` in the comment
+          # job for Welch's t CI on the per-VM means.
+          cp "${{ steps.bench.outputs.report-json-path }}" \
+            "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-report.json"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -136,7 +141,8 @@ jobs:
 
   # ------------------------------------------------------------------
   # Diff candidate vs baseline across all scenarios and post a PR
-  # comment with two tables (mean±σ and median±σ).
+  # comment with the mean±σ table and a 95% Welch CI on the relative
+  # delta (so reviewers can tell real regressions from measurement noise).
   # ------------------------------------------------------------------
   comment:
     needs: [resolve, run]
@@ -148,6 +154,42 @@ jobs:
           pattern: bench-*
           path: reports
           merge-multiple: true
+
+      # Set up the bar-benchmarks CLI so we can shell out to
+      # `bar-bench compare` for Welch's t CI per scenario. Same bootstrap
+      # the composite action uses internally.
+      - uses: actions/checkout@v4
+        with:
+          repository: bruno-dasilva/bar-benchmarks
+          ref: master
+          path: bar-benchmarks-tool
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: bar-benchmarks-tool/uv.lock
+      - name: uv sync bar-benchmarks
+        working-directory: bar-benchmarks-tool
+        run: uv sync --frozen
+
+      - name: Compute Welch CI per scenario
+        run: |
+          set -euo pipefail
+          mkdir -p comparisons
+          for sc in fightertest-bots fightertest-aircraft fightertest-tanks fightertest-pathfinding lategame1; do
+            cand="reports/candidate-${sc}-report.json"
+            base="reports/baseline-${sc}-report.json"
+            if [ ! -f "${cand}" ] || [ ! -f "${base}" ]; then
+              echo "::warning::missing report for ${sc} — skipping comparison"
+              continue
+            fi
+            (cd bar-benchmarks-tool && uv run bar-bench compare \
+              --candidate "${GITHUB_WORKSPACE}/${cand}" \
+              --baseline  "${GITHUB_WORKSPACE}/${base}" \
+              --output    "${GITHUB_WORKSPACE}/comparisons/${sc}.json")
+          done
 
       - uses: actions/github-script@v7
         with:
@@ -169,17 +211,24 @@ jobs:
               return JSON.parse(fs.readFileSync(p, 'utf8'));
             };
 
-            const fmtCell = (stat, sd, cached) => {
+            const loadCmp = (scenario) => {
+              const p = path.join('comparisons', `${scenario}.json`);
+              if (!fs.existsSync(p)) return null;
+              return JSON.parse(fs.readFileSync(p, 'utf8'));
+            };
+
+            const fmtCell = (stat, cached) => {
               if (stat == null) return "n/a";
-              const core = (sd == null)
-                ? `${Number(stat).toFixed(2)} ms`
-                : `${Number(stat).toFixed(2)} ± ${Number(sd).toFixed(2)} ms`;
+              const core = `${Number(stat).toFixed(2)} ms`;
               // ♻️ = "this cell came from a prior, reused Batch run"
               return cached ? `${core} ♻️` : core;
             };
-            // Delta is colored: positive (regression, slower) = red,
-            // negative (improvement, faster) = green. GitHub renders
-            // LaTeX math inside `$...$` in issue/PR comments.
+            // 95% CI on the relative candidate−baseline mean difference.
+            // Each endpoint is colored individually: negative
+            // (improvement, faster) = green, positive (regression,
+            // slower) = red. A CI with both endpoints the same color
+            // is a significant result; a mixed-color CI straddles 0
+            // and is noise at 95% confidence.
             //
             // Escape gotcha: markdown processes the comment body before
             // KaTeX does, and CommonMark strips `\` before ASCII
@@ -188,26 +237,31 @@ jobs:
             // eats the closing brace ("missing close brace"). We emit
             // `\\%` in the markdown (→ `\%` post-markdown → literal `%`
             // in KaTeX), which in a JS string literal is `\\\\%`.
-            const pct = (c, b) => {
-              if (c == null || b == null || b === 0) return "n/a";
-              const d = ((c - b) / b) * 100;
-              const s = (d >= 0 ? "+" : "") + d.toFixed(2) + "\\\\%";
-              const color = d > 0 ? "red" : d < 0 ? "green" : "gray";
-              return `$\\color{${color}}{${s}}$`;
+            const fmtCI = (cmp) => {
+              if (!cmp || cmp.delta_pct_low == null || cmp.delta_pct_high == null) {
+                return "n/a";
+              }
+              const colored = (x) => {
+                const s = (x >= 0 ? "+" : "") + x.toFixed(2) + "\\\\%";
+                const color = x > 0 ? "red" : x < 0 ? "green" : "gray";
+                return `\\color{${color}}{${s}}`;
+              };
+              return `$${colored(cmp.delta_pct_low)} \\text{ to } ${colored(cmp.delta_pct_high)}$`;
             };
 
-            const buildTable = (statKey) => {
+            const buildTable = () => {
               const lines = [
-                `| scenario | candidate | baseline | Δ |`,
+                `| scenario | candidate | baseline | Δ (95% CI) |`,
                 `|---|---|---|---|`,
               ];
               for (const sc of scenarios) {
                 const c = load('candidate', sc);
                 const b = load('baseline',  sc);
-                const cStat = c ? c[statKey] : null;
-                const bStat = b ? b[statKey] : null;
+                const cmp = loadCmp(sc);
+                const cStat = c ? c.mean : null;
+                const bStat = b ? b.mean : null;
                 lines.push(
-                  `| ${sc} | ${fmtCell(cStat, c && c.stddev, c && c.cached)} | ${fmtCell(bStat, b && b.stddev, b && b.cached)} | ${pct(cStat, bStat)} |`
+                  `| ${sc} | ${fmtCell(cStat, c && c.cached)} | ${fmtCell(bStat, b && b.cached)} | ${fmtCI(cmp)} |`
                 );
               }
               return lines.join("\n");
@@ -259,11 +313,8 @@ jobs:
               ``,
               `candidate \`${candSha.slice(0,7)}\` vs baseline \`${baseSha.slice(0,7)}\``,
               ``,
-              `#### sim mean ± σ (ms)`,
-              buildTable('mean'),
-              ``,
-              `#### sim median ± σ (ms)`,
-              buildTable('median'),
+              `#### sim mean (ms) with 95% CI on the relative delta`,
+              buildTable(),
               ``,
               `<sub>${cacheLine}</sub>`,
               ``,
