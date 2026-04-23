@@ -137,12 +137,15 @@ jobs:
             echo "::notice title=cache hit::${{ matrix.variant }} / ${{ matrix.case.scenario }} reused a prior run"
           fi
           # summary.json drives the candidate/baseline cells + footer.
+          # wall_s_cum = per-VM cumulative engine wall (per-iter mean ×
+          # iterations), the quantity the max-run-duration budget bounds.
           jq --arg variant  "${{ matrix.variant }}" \
              --arg scenario "${{ matrix.case.scenario }}" \
              --arg map      "${{ matrix.case.map }}" \
              --arg sha      "${{ steps.pick.outputs.sha }}" \
              --argjson cached "$( [ "${CACHED}" = "true" ] && echo true || echo false )" \
-             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, wall_s_mean: .engine_wall_s_mean, valid, invalid, compute_usd}' \
+             --argjson iterations "${{ github.event.inputs.mode == 'quick' && '1' || matrix.case.iterations }}" \
+             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, wall_s_cum: (if .engine_wall_s_mean == null then null else .engine_wall_s_mean * $iterations end), valid, invalid, compute_usd}' \
             "${{ steps.bench.outputs.report-json-path }}" > "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-summary.json"
           # Full BatchReport — fed to `bar-bench compare` in the comment
           # job for Welch's t CI on the per-VM means.
@@ -238,13 +241,14 @@ jobs:
               // ♻️ = "this cell came from a prior, reused Batch run"
               return cached ? `${core} ♻️` : core;
             };
-            // Per-iteration engine wall and valid iteration count,
-            // candidate leg only — the baseline runs the same scenario
-            // at the same spec, so a single number on each side is
-            // enough as a sanity gauge.
+            // Per-VM cumulative engine wall (per-iter mean × iterations)
+            // and valid iteration count, candidate leg only — the
+            // baseline runs the same scenario at the same spec, so a
+            // single number on each side is enough as a sanity gauge
+            // against the max-run-duration budget.
             const fmtWall = (r) => {
-              if (!r || r.wall_s_mean == null) return "n/a";
-              return `~${Number(r.wall_s_mean).toFixed(0)}s`;
+              if (!r || r.wall_s_cum == null) return "n/a";
+              return `~${Number(r.wall_s_cum).toFixed(0)}s`;
             };
             const fmtN = (r) => (r ? String(r.valid) : "—");
             // 95% CI on the relative candidate−baseline mean difference.
@@ -300,21 +304,6 @@ jobs:
               if (b) baseSha = b.sha;
             }
 
-            // Per-leg cache roll-up: list every (variant, scenario) that
-            // reused a prior run, with the reused job UID.
-            const cachedLegs = [];
-            for (const variant of ['candidate', 'baseline']) {
-              for (const sc of scenarios) {
-                const r = load(variant, sc);
-                if (r && r.cached) {
-                  cachedLegs.push(`${variant}/${sc} (reused \`${r.job_uid}\`)`);
-                }
-              }
-            }
-            const cacheLine = cachedLegs.length
-              ? `♻️ reused prior runs: ${cachedLegs.join(" · ")}`
-              : `♻️ no cache hits — all legs ran fresh`;
-
             // Sum compute cost across all legs. Cached legs report $0
             // (bar-bench lookup zeroes compute_usd), so the total only
             // reflects fresh Batch runs. Legs whose cost is null (e.g.
@@ -350,8 +339,6 @@ jobs:
               ``,
               `#### sim mean (ms) with 95% CI on the relative delta`,
               buildTable(),
-              ``,
-              `<sub>${cacheLine}</sub>`,
               ``,
               `<sub>${costLine}</sub>`,
               ``,
