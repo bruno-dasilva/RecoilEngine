@@ -24,6 +24,12 @@ on:
         description: "PR number to benchmark"
         required: true
         type: string
+      mode:
+        description: "quick = 1 iter/VM (cheap sanity check); full = matrix iterations (5× on fightertest-*, 2x on lategame1)"
+        required: false
+        type: choice
+        default: full
+        options: [quick, full]
 
 permissions:
   contents: read
@@ -75,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 3
       matrix:
         variant: [candidate, baseline]
         case:
@@ -87,7 +93,7 @@ jobs:
           - { map: starwatcher-v1.0,  scenario: fightertest-aircraft,     iterations: 5, max-run-duration: 3600 }
           - { map: starwatcher-v1.0,  scenario: fightertest-tanks,        iterations: 5, max-run-duration: 3600 }
           - { map: starwatcher-v1.0,  scenario: fightertest-pathfinding,  iterations: 5, max-run-duration: 3600 }
-          - { map: hellas-basin-v1.4, scenario: lategame1,                iterations: 1, max-run-duration: 1800 }
+          - { map: hellas-basin-v1.4, scenario: lategame1,                iterations: 2, max-run-duration: 1800 }
     steps:
       - name: Pick commit for this variant
         id: pick
@@ -113,7 +119,7 @@ jobs:
           map:              ${{ matrix.case.map }}
           scenario:         ${{ matrix.case.scenario }}
           count:            ${{ vars.BENCH_COUNT || '10' }}
-          iterations:       ${{ matrix.case.iterations }}
+          iterations:       ${{ github.event.inputs.mode == 'quick' && '1' || matrix.case.iterations }}
           max-run-duration: ${{ matrix.case.max-run-duration }}
           gcp-project:      ${{ vars.BENCHMARKS_GCP_PROJECT }}
           description:   "${{ matrix.variant }} PR#${{ needs.resolve.outputs.pr }} ${{ matrix.case.scenario }} @ ${{ steps.pick.outputs.sha }}"
