@@ -117,11 +117,16 @@ jobs:
       - name: Stash report for diff step
         run: |
           mkdir -p out
-          jq --arg variant "${{ matrix.variant }}" \
+          CACHED="${{ steps.bench.outputs.prior-run-hit }}"
+          if [ "${CACHED}" = "true" ]; then
+            echo "::notice title=cache hit::${{ matrix.variant }} / ${{ matrix.case.scenario }} reused a prior run"
+          fi
+          jq --arg variant  "${{ matrix.variant }}" \
              --arg scenario "${{ matrix.case.scenario }}" \
-             --arg map "${{ matrix.case.map }}" \
-             --arg sha "${{ steps.pick.outputs.sha }}" \
-             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, job_uid, mean: .sim_mean_ms_mean, median: .sim_mean_ms_median, stddev: .sim_mean_ms_stddev, valid, invalid}' \
+             --arg map      "${{ matrix.case.map }}" \
+             --arg sha      "${{ steps.pick.outputs.sha }}" \
+             --argjson cached "$( [ "${CACHED}" = "true" ] && echo true || echo false )" \
+             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, median: .sim_mean_ms_median, stddev: .sim_mean_ms_stddev, valid, invalid}' \
             "${{ steps.bench.outputs.report-json-path }}" > "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-summary.json"
 
       - uses: actions/upload-artifact@v4
@@ -164,13 +169,25 @@ jobs:
               return JSON.parse(fs.readFileSync(p, 'utf8'));
             };
 
-            const fmtCell = (stat, sd) =>
-              (stat == null) ? "n/a"
-                : (sd == null) ? `${Number(stat).toFixed(2)} ms`
+            const fmtCell = (stat, sd, cached) => {
+              if (stat == null) return "n/a";
+              const core = (sd == null)
+                ? `${Number(stat).toFixed(2)} ms`
                 : `${Number(stat).toFixed(2)} ± ${Number(sd).toFixed(2)} ms`;
+              // ♻️ = "this cell came from a prior, reused Batch run"
+              return cached ? `${core} ♻️` : core;
+            };
             // Delta is colored: positive (regression, slower) = red,
             // negative (improvement, faster) = green. GitHub renders
             // LaTeX math inside `$...$` in issue/PR comments.
+            //
+            // Escape gotcha: markdown processes the comment body before
+            // KaTeX does, and CommonMark strips `\` before ASCII
+            // punctuation like `%` — so `\%` in the source reaches
+            // KaTeX as a bare `%`, which starts a LaTeX comment and
+            // eats the closing brace ("missing close brace"). We emit
+            // `\\%` in the markdown (→ `\%` post-markdown → literal `%`
+            // in KaTeX), which in a JS string literal is `\\\\%`.
             const pct = (c, b) => {
               if (c == null || b == null || b === 0) return "n/a";
               const d = ((c - b) / b) * 100;
@@ -190,7 +207,7 @@ jobs:
                 const cStat = c ? c[statKey] : null;
                 const bStat = b ? b[statKey] : null;
                 lines.push(
-                  `| ${sc} | ${fmtCell(cStat, c && c.stddev)} | ${fmtCell(bStat, b && b.stddev)} | ${pct(cStat, bStat)} |`
+                  `| ${sc} | ${fmtCell(cStat, c && c.stddev, c && c.cached)} | ${fmtCell(bStat, b && b.stddev, b && b.cached)} | ${pct(cStat, bStat)} |`
                 );
               }
               return lines.join("\n");
@@ -214,6 +231,21 @@ jobs:
               return `${sc}: cand ${cv} · base ${bv}`;
             }).join(" · ");
 
+            // Per-leg cache roll-up: list every (variant, scenario) that
+            // reused a prior run, with the reused job UID.
+            const cachedLegs = [];
+            for (const variant of ['candidate', 'baseline']) {
+              for (const sc of scenarios) {
+                const r = load(variant, sc);
+                if (r && r.cached) {
+                  cachedLegs.push(`${variant}/${sc} (reused \`${r.job_uid}\`)`);
+                }
+              }
+            }
+            const cacheLine = cachedLegs.length
+              ? `♻️ reused prior runs: ${cachedLegs.join(" · ")}`
+              : `♻️ no cache hits — all legs ran fresh`;
+
             const body = [
               `### bar-benchmark — PR #${{ needs.resolve.outputs.pr }}`,
               ``,
@@ -224,6 +256,8 @@ jobs:
               ``,
               `#### sim median ± σ (ms)`,
               buildTable('median'),
+              ``,
+              `<sub>${cacheLine}</sub>`,
               ``,
               `<sub>valid/invalid — ${validLine}</sub>`,
               ``,
