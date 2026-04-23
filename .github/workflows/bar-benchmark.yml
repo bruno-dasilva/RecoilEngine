@@ -107,6 +107,11 @@ jobs:
           count:         ${{ vars.BENCH_COUNT || '10' }}
           gcp-project:   ${{ vars.BENCHMARKS_GCP_PROJECT }}
           description:   "${{ matrix.variant }} PR#${{ needs.resolve.outputs.pr }} ${{ matrix.case.scenario }} @ ${{ steps.pick.outputs.sha }}"
+          # Reuse prior results when the same (engine-commit, scenario,
+          # map, count, machine-type) has already been benchmarked — the
+          # baseline commit rarely changes, and re-running the same PR
+          # head should short-circuit too.
+          lookup-prior-results: "true"
 
       - name: Stash report for diff step
         run: |
