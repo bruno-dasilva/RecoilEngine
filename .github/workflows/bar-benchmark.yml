@@ -97,8 +97,8 @@ jobs:
         with:
           engine-commit: ${{ steps.pick.outputs.sha }}
           bar-content:   ${{ vars.BENCH_BAR_CONTENT || 'bar-test-29871-90f4bc1' }}
-          map:           ${{ vars.BENCH_MAP         || 'hellas-basin-v1.4' }}
-          scenario:      ${{ vars.BENCH_SCENARIO    || 'lategame1' }}
+          map:           ${{ vars.BENCH_MAP         || 'starwatcher-v1.0' || 'hellas-basin-v1.4' }}
+          scenario:      ${{ vars.BENCH_SCENARIO    || 'fightertest-bots' || 'lategame1' }}
           count:         ${{ vars.BENCH_COUNT       || '10' }}
           gcp-project:   ${{ vars.BENCHMARKS_GCP_PROJECT }}
           description:   "${{ matrix.variant }} PR#${{ needs.resolve.outputs.pr }} @ ${{ steps.pick.outputs.sha }}"
