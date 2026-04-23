@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         variant: [candidate, baseline]
         case:
@@ -136,7 +136,7 @@ jobs:
              --arg map      "${{ matrix.case.map }}" \
              --arg sha      "${{ steps.pick.outputs.sha }}" \
              --argjson cached "$( [ "${CACHED}" = "true" ] && echo true || echo false )" \
-             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, valid, invalid}' \
+             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, valid, invalid, compute_usd}' \
             "${{ steps.bench.outputs.report-json-path }}" > "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-summary.json"
           # Full BatchReport — fed to `bar-bench compare` in the comment
           # job for Welch's t CI on the per-VM means.
@@ -309,6 +309,26 @@ jobs:
               ? `♻️ reused prior runs: ${cachedLegs.join(" · ")}`
               : `♻️ no cache hits — all legs ran fresh`;
 
+            // Sum compute cost across all legs. Cached legs report $0
+            // (bar-bench lookup zeroes compute_usd), so the total only
+            // reflects fresh Batch runs. Legs whose cost is null (e.g.
+            // unknown machine-type entry in the price table) are
+            // ignored with a note.
+            let totalUsd = 0, fresh = 0, cached = 0, unpriced = 0;
+            for (const variant of ['candidate', 'baseline']) {
+              for (const sc of scenarios) {
+                const r = load(variant, sc);
+                if (!r) continue;
+                if (r.cached) cached++;
+                else if (r.compute_usd == null) unpriced++;
+                else { totalUsd += r.compute_usd; fresh++; }
+              }
+            }
+            const costBits = [`$${totalUsd.toFixed(2)}`, `${fresh} fresh leg${fresh === 1 ? "" : "s"}`];
+            if (cached) costBits.push(`${cached} cached at $0`);
+            if (unpriced) costBits.push(`${unpriced} unpriced`);
+            const costLine = `💰 compute cost: ${costBits.join(" · ")}`;
+
             // Hidden marker used to locate a prior bar-benchmark comment
             // on this PR so we update it in place instead of posting a
             // new one on every workflow re-trigger. HTML comments don't
@@ -326,6 +346,8 @@ jobs:
               buildTable(),
               ``,
               `<sub>${cacheLine}</sub>`,
+              ``,
+              `<sub>${costLine}</sub>`,
               ``,
               `<sub>valid/invalid — ${validLine}</sub>`,
               ``,
