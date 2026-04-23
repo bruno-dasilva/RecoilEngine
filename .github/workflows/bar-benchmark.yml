@@ -174,7 +174,7 @@ jobs:
             const pct = (c, b) => {
               if (c == null || b == null || b === 0) return "n/a";
               const d = ((c - b) / b) * 100;
-              const s = (d >= 0 ? "+" : "") + d.toFixed(2) + "\\%";
+              const s = (d >= 0 ? "+" : "") + d.toFixed(2) + "\\\\%";
               const color = d > 0 ? "red" : d < 0 ? "green" : "gray";
               return `$\\color{${color}}{${s}}$`;
             };
