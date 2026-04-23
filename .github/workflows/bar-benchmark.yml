@@ -136,7 +136,7 @@ jobs:
              --arg map      "${{ matrix.case.map }}" \
              --arg sha      "${{ steps.pick.outputs.sha }}" \
              --argjson cached "$( [ "${CACHED}" = "true" ] && echo true || echo false )" \
-             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, valid, invalid, compute_usd}' \
+             '{variant: $variant, scenario: $scenario, map: $map, sha: $sha, cached: $cached, job_uid, mean: .sim_mean_ms_mean, wall_s_mean: .engine_wall_s_mean, valid, invalid, compute_usd}' \
             "${{ steps.bench.outputs.report-json-path }}" > "out/${{ matrix.variant }}-${{ matrix.case.scenario }}-summary.json"
           # Full BatchReport — fed to `bar-bench compare` in the comment
           # job for Welch's t CI on the per-VM means.
@@ -232,6 +232,15 @@ jobs:
               // ♻️ = "this cell came from a prior, reused Batch run"
               return cached ? `${core} ♻️` : core;
             };
+            // Per-iteration engine wall and valid iteration count,
+            // candidate leg only — the baseline runs the same scenario
+            // at the same spec, so a single number on each side is
+            // enough as a sanity gauge.
+            const fmtWall = (r) => {
+              if (!r || r.wall_s_mean == null) return "n/a";
+              return `~${Number(r.wall_s_mean).toFixed(0)}s`;
+            };
+            const fmtN = (r) => (r ? String(r.valid) : "—");
             // 95% CI on the relative candidate−baseline mean difference.
             // Each endpoint is colored individually: negative
             // (improvement, faster) = green, positive (regression,
@@ -260,8 +269,8 @@ jobs:
 
             const buildTable = () => {
               const lines = [
-                `| scenario | candidate | baseline | Δ (95% CI) |`,
-                `|---|---|---|---|`,
+                `| scenario | candidate | baseline | Δ (95% CI) | n | engine wall |`,
+                `|---|---|---|---|---|---|`,
               ];
               for (const sc of scenarios) {
                 const c = load('candidate', sc);
@@ -270,29 +279,20 @@ jobs:
                 const cStat = c ? c.mean : null;
                 const bStat = b ? b.mean : null;
                 lines.push(
-                  `| ${sc} | ${fmtCell(cStat, c && c.cached)} | ${fmtCell(bStat, b && b.cached)} | ${fmtCI(cmp)} |`
+                  `| ${sc} | ${fmtCell(cStat, c && c.cached)} | ${fmtCell(bStat, b && b.cached)} | ${fmtCI(cmp)} | ${fmtN(c)} | ${fmtWall(c)} |`
                 );
               }
               return lines.join("\n");
             };
 
-            // Pull a representative pair of job UIDs + SHAs for the footer.
+            // Pull a representative pair of SHAs for the header.
             let candSha = "", baseSha = "";
-            const candJobs = [], baseJobs = [];
             for (const sc of scenarios) {
               const c = load('candidate', sc);
               const b = load('baseline',  sc);
-              if (c) { candSha = c.sha; candJobs.push(`${sc}:${c.job_uid}`); }
-              if (b) { baseSha = b.sha; baseJobs.push(`${sc}:${b.job_uid}`); }
+              if (c) candSha = c.sha;
+              if (b) baseSha = b.sha;
             }
-
-            const validLine = scenarios.map(sc => {
-              const c = load('candidate', sc);
-              const b = load('baseline',  sc);
-              const cv = c ? `${c.valid}/${c.invalid}` : "—";
-              const bv = b ? `${b.valid}/${b.invalid}` : "—";
-              return `${sc}: cand ${cv} · base ${bv}`;
-            }).join(" · ");
 
             // Per-leg cache roll-up: list every (variant, scenario) that
             // reused a prior run, with the reused job UID.
@@ -348,11 +348,6 @@ jobs:
               `<sub>${cacheLine}</sub>`,
               ``,
               `<sub>${costLine}</sub>`,
-              ``,
-              `<sub>valid/invalid — ${validLine}</sub>`,
-              ``,
-              `<sub>candidate jobs: ${candJobs.map(j => `\`${j}\``).join(' · ')}</sub>`,
-              `<sub>baseline jobs: ${baseJobs.map(j => `\`${j}\``).join(' · ')}</sub>`,
               ``,
               `<sub>last updated: ${new Date().toISOString()} · [workflow run](${runUrl})</sub>`,
             ].join("\n");
