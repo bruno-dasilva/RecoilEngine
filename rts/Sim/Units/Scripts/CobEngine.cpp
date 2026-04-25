@@ -206,17 +206,19 @@ void CCobEngine::WakeSleepingThreads()
 	ZoneScoped;
 	// check on the sleeping threads, remove any whose owner died
 	while (!sleepingThreadIDs.empty()) {
-		// PQ already knows the earliest wakeTime — bail before any hashmap probe
-		// when nothing is due.
-		const auto top = sleepingThreadIDs.top();
-		if (top.wt >= currentTime)
+		CCobThread* zzzThread = GetThread((sleepingThreadIDs.top()).id);
+
+		if (zzzThread == nullptr) {
+			sleepingThreadIDs.pop();
+			continue;
+		}
+
+		// not yet time to execute this thread or any subsequent sleepers
+		if (zzzThread->GetWakeTime() >= currentTime)
 			break;
 
+		// remove executing thread from the queue
 		sleepingThreadIDs.pop();
-
-		CCobThread* zzzThread = GetThread(top.id);
-		if (zzzThread == nullptr)
-			continue;
 
 		// wake up the thread and tick it (if not dead)
 		// this can quite possibly re-add the thread to <sleepingThreadIDs>
