@@ -65,15 +65,10 @@ public:
 
 public:
 	void Init() {
-		// Target workload is ~10k units (~30-50k concurrent COB threads) with
-		// headroom to MAX_UNITS (~100-160k threads). Pre-size the free-list and
-		// scheduler queues for that; the slot deque grows by chunks without
-		// invalidating existing slots.
 		tickAddedThreads.reserve(128);
 
-		freeSlots.reserve(8192);
-		runningThreadIDs.reserve(8192);
-		waitingThreadIDs.reserve(8192);
+		runningThreadIDs.reserve(512);
+		waitingThreadIDs.reserve(512);
 
 		sleepingThreadIDs = {};
 
