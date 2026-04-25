@@ -16,6 +16,7 @@
 #include "System/creg/STL_Queue.h"
 #include "System/creg/STL_Map.h"
 #include "System/Cpp11Compat.hpp"
+#include "System/SpringChainedHashMap.hpp"
 
 class CCobThread;
 class CCobInstance;
@@ -115,7 +116,7 @@ private:
 
 private:
 	// registry of every thread across all script instances
-	spring::unordered_map<int, CCobThread> threadInstances;
+	spring::chained_hashmap<int, CCobThread> threadInstances;
 	// threads that are spawned during Tick
 	std::vector<CCobThread> tickAddedThreads;
 	// threads that are killed during Tick
