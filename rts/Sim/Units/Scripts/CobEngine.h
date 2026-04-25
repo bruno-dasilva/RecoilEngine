@@ -46,9 +46,14 @@ public:
 	struct ThreadSlot {
 		CR_DECLARE_STRUCT(ThreadSlot)
 
-		CCobThread thread;
+		// Meta first so GetThread's gen/occupied check shares a cache line
+		// with the head of `thread` (cobInst, cobFile). Reverses an older
+		// {thread, meta} layout that forced GetThread to touch the slot
+		// tail line for validation in addition to the head line returned
+		// to the caller.
 		uint32_t   generation = 0;
 		bool       occupied   = false;
+		CCobThread thread;
 	};
 
 	struct CCobThreadComp {

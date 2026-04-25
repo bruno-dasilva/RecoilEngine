@@ -37,9 +37,9 @@ CR_REG_METADATA(CCobEngine::SleepingThread, (
 
 CR_BIND(CCobEngine::ThreadSlot, )
 CR_REG_METADATA(CCobEngine::ThreadSlot, (
-	CR_MEMBER(thread),
 	CR_MEMBER(generation),
-	CR_MEMBER(occupied)
+	CR_MEMBER(occupied),
+	CR_MEMBER(thread)
 ))
 
 static const char* const numCobThreadsPlot = "CobThreads";
