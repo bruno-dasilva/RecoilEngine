@@ -5,7 +5,6 @@
 
 #include "creg_cond.h"
 #include "System/UnorderedMap.hpp"
-#include "System/SpringChainedHashMap.hpp"
 
 #include <map>
 
@@ -98,12 +97,6 @@ namespace creg
 	struct DeduceType<spring::unsynced_map<TKey, TValue> > {
 		static std::unique_ptr<IType> Get() {
 			return std::unique_ptr<IType>(new MapType<spring::unsynced_map<TKey, TValue> >());
-		}
-	};
-	template<typename TKey, typename TValue>
-	struct DeduceType<spring::chained_hashmap<TKey, TValue> > {
-		static std::unique_ptr<IType> Get() {
-			return std::unique_ptr<IType>(new MapType<spring::chained_hashmap<TKey, TValue> >());
 		}
 	};
 
