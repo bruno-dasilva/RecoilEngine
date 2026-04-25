@@ -566,7 +566,9 @@ void DumpState(int newMinFrameNum, int newMaxFrameNum, int newFramePeriod, std::
 		for (const auto& [tid, thread] : cobEngine->GetThreadInstances()) {
 			auto ownerID = thread.cobInst->GetUnit() ? thread.cobInst->GetUnit()->id : -1;
 			file
-				<< "\t\t\tid: " << tid << " t.id " << thread.GetID() << " t.wt " << thread.GetWakeTime()
+				<< "\t\t\tid: " << CobThreadSlot(tid) << "/" << CobThreadGen(tid)
+				<< " t.id " << CobThreadSlot(thread.GetID()) << "/" << CobThreadGen(thread.GetID())
+				<< " t.wt " << thread.GetWakeTime()
 				<< " owner " << ownerID
 				<< " fn " << thread.cobFile->name
 				<< " code cs " << CheckSum(thread.cobFile->code)
@@ -582,7 +584,7 @@ void DumpState(int newMinFrameNum, int newMaxFrameNum, int newFramePeriod, std::
 		file << "\t\tWaitingThreads: " << cobEngine->GetWaitingThreadIDs().size();
 		file << "\t\t\tids:";
 		for (const auto id : cobEngine->GetWaitingThreadIDs()) {
-			file << " " << id;
+			file << " " << CobThreadSlot(id) << "/" << CobThreadGen(id);
 		}
 		file << "\n";
 
@@ -591,7 +593,7 @@ void DumpState(int newMinFrameNum, int newMaxFrameNum, int newFramePeriod, std::
 		file << "\t\t\twts|ids:";
 		while (!zzzThreads.empty()) {
 			const auto& zt = zzzThreads.top();
-			file << " " << zt.wt << "|" << zt.id;
+			file << " " << zt.wt << "|" << CobThreadSlot(zt.id) << "/" << CobThreadGen(zt.id);
 			zzzThreads.pop();
 		}
 		file << "\n";

@@ -16,7 +16,7 @@
 #include "System/creg/STL_Queue.h"
 #include "System/creg/STL_Map.h"
 #include "System/Cpp11Compat.hpp"
-#include "System/SpringChainedHashMap.hpp"
+#include "System/SlotMap.hpp"
 
 class CCobThread;
 class CCobInstance;
@@ -31,7 +31,7 @@ public:
 	struct SleepingThread {
 		CR_DECLARE_STRUCT(SleepingThread)
 
-		int id;
+		CobThreadHandle id;
 		int wt;
 	};
 
@@ -55,12 +55,12 @@ public:
 		curThread = nullptr;
 
 		currentTime = 0;
-		threadCounter = 0;
 	}
 	void Kill() {
 		// threadInstances is never explicitly iterated in the actual code,
-		// but iterated during sync dumps, so clean it with clear_unordered_map
-		spring::clear_unordered_map(threadInstances);
+		// but iterated during sync dumps; slot_map::clear() resets storage,
+		// freelist, and live count.
+		threadInstances.clear();
 		spring::clear_unordered_map(deferredCallins);
 		tickAddedThreads.clear();
 
@@ -76,21 +76,17 @@ public:
 	void ShowScriptError(const std::string& msg);
 
 
-	CCobThread* GetThread(int threadID) {
-		const auto it = threadInstances.find(threadID);
-
-		if (it == threadInstances.end())
-			return nullptr;
-
-		return &(it->second);
+	CCobThread* GetThread(CobThreadHandle threadID) {
+		return threadInstances.find(threadID);
 	}
 
-	bool RemoveThread(int threadID);
-	int AddThread(CCobThread&& thread);
-	int GenThreadID() { return (threadCounter++); }
+	bool RemoveThread(CobThreadHandle threadID);
+	CobThreadHandle AddThread(CCobThread&& thread);
+	CobThreadHandle ReserveThreadHandle() { return threadInstances.reserve_handle(); }
+	void ReleaseThreadHandle(CobThreadHandle h) { threadInstances.release_handle(h); }
 
 	void QueueAddThread(CCobThread&& thread) { tickAddedThreads.emplace_back(std::move(thread)); }
-	void QueueRemoveThread(int threadID) { tickRemovedThreads.emplace_back(threadID); }
+	void QueueRemoveThread(CobThreadHandle threadID) { tickRemovedThreads.emplace_back(threadID); }
 	void ProcessQueuedThreads();
 
 	void ScheduleThread(const CCobThread* thread);
@@ -103,8 +99,6 @@ public:
 	const auto& GetWaitingThreadIDs() const { return waitingThreadIDs; }
 	const auto& GetSleepingThreadIDs() const { return sleepingThreadIDs; }
 	const auto  GetCurrTime() const { return currentTime; }
-	const auto  GetThreadCounter() const { return threadCounter; }
-	const auto  GetCurrCounter() const { return threadCounter; }
 
 	void AddDeferredCallin(CCobDeferredCallin&& deferredCallin);
 	void RunDeferredCallins();
@@ -116,14 +110,14 @@ private:
 
 private:
 	// registry of every thread across all script instances
-	spring::chained_hashmap<int, CCobThread> threadInstances;
+	spring::slot_map<CCobThread> threadInstances;
 	// threads that are spawned during Tick
 	std::vector<CCobThread> tickAddedThreads;
 	// threads that are killed during Tick
-	std::vector<int> tickRemovedThreads;
+	std::vector<CobThreadHandle> tickRemovedThreads;
 
-	std::vector<int> runningThreadIDs;
-	std::vector<int> waitingThreadIDs;
+	std::vector<CobThreadHandle> runningThreadIDs;
+	std::vector<CobThreadHandle> waitingThreadIDs;
 
 	spring::unordered_map<int, std::vector<CCobDeferredCallin> > deferredCallins;
 
@@ -134,7 +128,6 @@ private:
 	CCobThread* curThread = nullptr;
 
 	int currentTime = 0;
-	int threadCounter = 0;
 };
 
 

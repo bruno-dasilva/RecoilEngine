@@ -25,8 +25,7 @@ CR_REG_METADATA(CCobEngine, (
 	CR_IGNORED(curThread),
 	CR_IGNORED(deferredCallins),
 
-	CR_MEMBER(currentTime),
-	CR_MEMBER(threadCounter)
+	CR_MEMBER(currentTime)
 ))
 
 CR_BIND(CCobEngine::SleepingThread, )
@@ -37,30 +36,29 @@ CR_REG_METADATA(CCobEngine::SleepingThread, (
 
 static const char* const numCobThreadsPlot = "CobThreads";
 
-int CCobEngine::AddThread(CCobThread&& thread)
+CobThreadHandle CCobEngine::AddThread(CCobThread&& thread)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (thread.GetID() == -1)
-		thread.SetID(GenThreadID());
+	// callers (START opcode, RealCall) pre-reserve a handle so the partially
+	// constructed thread can carry its own ID before the value is moved in;
+	// callers that don't pre-reserve get one synthesized here.
+	if (thread.GetID() == InvalidCobThread)
+		thread.SetID(threadInstances.reserve_handle());
 
+	const CobThreadHandle h = thread.GetID();
 	CCobInstance* o = thread.cobInst;
-	CCobThread& t = threadInstances[thread.GetID()];
+	o->AddThreadID(h);
 
-	// move thread into registry, hand its ID to owner
-	t = std::move(thread);
-	o->AddThreadID(t.GetID());
+	threadInstances.restore(h, std::move(thread));
 
 	TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadInstances.size()));
 
-	return (t.GetID());
+	return h;
 }
 
-bool CCobEngine::RemoveThread(int threadID) {
+bool CCobEngine::RemoveThread(CobThreadHandle threadID) {
 	RECOIL_DETAILED_TRACY_ZONE;
-	const auto it = threadInstances.find(threadID);
-
-	if (it != threadInstances.end()) {
-		threadInstances.erase(it);
+	if (threadInstances.erase(threadID)) {
 		TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadInstances.size()));
 		return true;
 	}
@@ -73,7 +71,7 @@ void CCobEngine::ProcessQueuedThreads() {
 
 	// Remove threads killed during Tick by other thread (SIGNAL), we do it
 	// here as nothing is actively referencing any thread's memory here.
-	for (int threadID: tickRemovedThreads) {
+	for (CobThreadHandle threadID: tickRemovedThreads) {
 		RemoveThread(threadID);
 	}
 	tickRemovedThreads.clear();
@@ -100,7 +98,7 @@ void CCobEngine::ScheduleThread(const CCobThread* thread)
 			sleepingThreadIDs.push(SleepingThread{thread->GetID(), thread->GetWakeTime()});
 		} break;
 		default: {
-			LOG_L(L_ERROR, "[COBEngine::%s] unknown state %d for thread %d", __func__, thread->GetState(), thread->GetID());
+			LOG_L(L_ERROR, "[COBEngine::%s] unknown state %d for thread %llu", __func__, thread->GetState(), (unsigned long long)thread->GetID());
 		} break;
 	}
 }
@@ -164,7 +162,7 @@ void CCobEngine::WakeSleepingThreads()
 				RemoveThread(zzzThread->GetID());
 			} break;
 			default: {
-				LOG_L(L_ERROR, "[COBEngine::%s] unknown state %d for thread %d", __func__, zzzThread->GetState(), zzzThread->GetID());
+				LOG_L(L_ERROR, "[COBEngine::%s] unknown state %d for thread %llu", __func__, zzzThread->GetState(), (unsigned long long)zzzThread->GetID());
 			} break;
 		}
 	}
@@ -174,7 +172,7 @@ void CCobEngine::TickRunningThreads()
 {
 	ZoneScoped;
 	// advance all currently running threads
-	for (const int threadID: runningThreadIDs) {
+	for (const CobThreadHandle threadID: runningThreadIDs) {
 		TickThread(GetThread(threadID));
 	}
 

@@ -379,7 +379,7 @@ bool CCobThread::Tick()
 
 				CCobThread t(cobInst);
 
-				t.SetID(cobEngine->GenThreadID());
+				t.SetID(cobEngine->ReserveThreadHandle());
 				t.InitStack(r2, this);
 				t.Start(r1, signalMask, {{0}}, true);
 

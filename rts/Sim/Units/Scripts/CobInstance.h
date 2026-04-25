@@ -3,8 +3,20 @@
 #ifndef COB_INSTANCE_H
 #define COB_INSTANCE_H
 
+#include <cstdint>
+
 #include "UnitScript.h"
 #include "Sim/Units/Unit.h"
+
+
+// Handle into CCobEngine's slot-map registry. Replaces what used to be `int id`
+// on threads. Packed as (gen:32 << 32) | (slot:32); 0 is the never-assigned
+// sentinel (formerly `id == -1`).
+using CobThreadHandle = uint64_t;
+inline constexpr CobThreadHandle InvalidCobThread = 0;
+
+inline constexpr uint32_t CobThreadSlot(CobThreadHandle h) noexcept { return uint32_t(h & 0xFFFFFFFFu); }
+inline constexpr uint32_t CobThreadGen (CobThreadHandle h) noexcept { return uint32_t(h >> 32); }
 
 
 #define PACKXZ(x,z) (((int)(x) << 16)+((int)(z) & 0xffff))
@@ -48,7 +60,7 @@ public:
 	CCobFile* cobFile;
 
 	std::vector<int> staticVars;
-	std::vector<int> threadIDs;
+	std::vector<CobThreadHandle> threadIDs;
 
 public:
 	// creg only
@@ -59,8 +71,8 @@ public:
 	void Init();
 	void PostLoad();
 
-	void AddThreadID(int threadID) { threadIDs.push_back(threadID); }
-	bool RemoveThreadID(int threadID)
+	void AddThreadID(CobThreadHandle threadID) { threadIDs.push_back(threadID); }
+	bool RemoveThreadID(CobThreadHandle threadID)
 	{
 		const auto it = std::find(threadIDs.begin(), threadIDs.end(), threadID);
 

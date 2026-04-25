@@ -81,7 +81,7 @@ void CCobInstance::PostLoad()
 
 	cobFile = cobFileHandler->GetCobFile(unit->unitDef->scriptName);
 
-	for (int threadID: threadIDs) {
+	for (CobThreadHandle threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
 
 		t->cobInst = this;
@@ -512,7 +512,7 @@ float CCobInstance::TargetWeight(int weaponNum, const CUnit* targetUnit)
 void CCobInstance::AnimFinished(AnimType type, int piece, int axis)
 {
 	ZoneScoped;
-	for (int threadID: threadIDs) {
+	for (CobThreadHandle threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
 		t->AnimFinished(type, piece, axis);
 	}
@@ -568,7 +568,7 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 
 	// tick the thread locally in case we're recursively running this function and then the threads may reallocate
 	CCobThread newThread(this);
-	newThread.SetID(cobEngine->GenThreadID());
+	newThread.SetID(cobEngine->ReserveThreadHandle());
 
 	// make sure this is run even if the call terminates instantly
 	if (cb != CBNone)
@@ -603,6 +603,9 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 		// dtor runs the callback
 		if (retCode != nullptr)
 			*retCode = newThread.GetRetCode();
+
+		// thread never made it into the registry, recycle the slot
+		cobEngine->ReleaseThreadHandle(newThread.GetID());
 	} else {
 		cobEngine->AddThread(std::move(newThread));
 	}
@@ -730,7 +733,7 @@ void CCobInstance::ThreadCallback(ThreadCallbackType type, int retCode, int cbPa
 void CCobInstance::Signal(int signal)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	for (int threadID: threadIDs) {
+	for (CobThreadHandle threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
 
 		if ((signal & t->GetSignalMask()) == 0)
