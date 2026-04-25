@@ -489,7 +489,8 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 		# disable rest
 		#set(FALLBACK_SSE_FLAGS "${FALLBACK_SSE_FLAGS} -mno-3dnow") tests showed it might sync
 		set(FALLBACK_SSE_FLAGS "${FALLBACK_SSE_FLAGS} -mno-sse3 -mno-ssse3 -mno-sse4.1 -mno-sse4.2 -mno-sse4 -mno-sse4a")
-		set(FALLBACK_SSE_FLAGS "${FALLBACK_SSE_FLAGS} -mno-avx -mno-fma -mno-fma4 -mno-xop -mno-lwp")
+		# FMA perf experiment: enable AVX + FMA3 (FMA3 requires AVX VEX encoding)
+		set(FALLBACK_SSE_FLAGS "${FALLBACK_SSE_FLAGS} -mavx -mfma -mno-fma4 -mno-xop -mno-lwp")
 		set(FALLBACK_SSE_FLAGS "${FALLBACK_SSE_FLAGS} -mno-avx2")
 
 		if (MARCH_BITS EQUAL 64)
@@ -515,7 +516,8 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}
 	else()
 		# Clang on x86_64: use SSE like GCC
 		if (NOT MARCH_FLAG OR MARCH_FLAG STREQUAL "" OR MARCH_FLAG STREQUAL "generic")
-			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -mfpmath=sse")
+			# FMA perf experiment: enable AVX + FMA3 (FMA3 requires AVX VEX encoding)
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -mavx -mfma -mfpmath=sse")
 		else()
 			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${MARCH_FLAG} -mtune=${MARCH_FLAG}")
 		endif()
