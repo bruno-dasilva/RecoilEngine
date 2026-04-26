@@ -80,6 +80,9 @@ LocalModelPiece::~LocalModelPiece()
 
 void LocalModelPiece::AddChild(LocalModelPiece* c)
 {
+	// Linear sweep in CUnitScript::TickAllAnims relies on parent index < child index.
+	assert(c->lmodelPieceIndex == -1 || lmodelPieceIndex == -1 ||
+	       c->lmodelPieceIndex > lmodelPieceIndex);
 	c->parent = this;
 	children.push_back(c);
 	c->rank = rank + 1;
