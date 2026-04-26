@@ -2904,7 +2904,7 @@ int LuaOpenGL::TexRect(lua_State* L)
  * @param numGroupX integer
  * @param numGroupY integer
  * @param numGroupZ integer
- * @param barriers integer? (Default: `4`)
+ * @param barriers integer? (Default: `0`)
  */
 int LuaOpenGL::DispatchCompute(lua_State* L)
 {
@@ -2929,7 +2929,7 @@ int LuaOpenGL::DispatchCompute(lua_State* L)
 
 	glDispatchCompute(numGroupX, numGroupY, numGroupZ);
 
-	GLbitfield barriers = (GLbitfield)luaL_optint(L, 1, 4);
+	GLbitfield barriers = (GLbitfield)luaL_optint(L, 4, 0);
 	//skip checking the correctness of values :)
 
 	if (barriers > 0u)
