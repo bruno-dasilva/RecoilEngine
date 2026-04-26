@@ -80,7 +80,8 @@ int CCobEngine::AddThread(CCobThread&& thread)
 	if (thread.GetID() == -1) {
 		thread.SetID(AllocateThreadID());
 	}
-	
+	assert(thread.GetID() >= 0);
+
 	uint32_t generation;
     size_t slotIndex;
     UnpackThreadID(thread.GetID(), generation, slotIndex);
@@ -95,6 +96,7 @@ int CCobEngine::AddThread(CCobThread&& thread)
 
 bool CCobEngine::RemoveThread(int threadID) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	assert(threadID >= 0);
 
     size_t slotIndex;
 	uint32_t generation;
@@ -293,6 +295,8 @@ int CCobEngine::PackThreadID(const uint32_t generation, const size_t slotIndex) 
 	assert(slotIndex <= SLOT_MAX);
 	assert(generation <= GENERATION_MAX);
 	if unlikely (slotIndex > SLOT_MAX || generation > GENERATION_MAX) {
+		LOG_L(L_ERROR, "[CCobEngine::%s] cannot pack id (generation=%u, slotIndex=%zu) — exceeds GENERATION_MAX=%u or SLOT_MAX=%u",
+			__func__, generation, slotIndex, GENERATION_MAX, SLOT_MAX);
 		return -1;
 	}
 	return static_cast<int>((generation << THREAD_ID_SLOT_BITS) | slotIndex);
