@@ -98,14 +98,21 @@ CCobInstance::~CCobInstance()
 	// this may be dangerous, is it really desired?
 	// Destroy();
 
-	// delete our threads, make sure callbacks do not run
+	// delete our threads, make sure callbacks do not run.
+	// MakeGarbage() neuters Stop()'s self-removal, so we own the pop_back here.
 	while (!threadIDs.empty()) {
-		CCobThread* t = cobEngine->GetThread(threadIDs.back());
+		const int threadID = threadIDs.back();
+		threadIDs.pop_back();
+
+		CCobThread* t = cobEngine->GetThread(threadID);
+		if (t == nullptr) {
+			LOG_L(L_ERROR, "[CCobInstance::%s] stale thread id %d in threadIDs (instance=%p, unit=%d)",
+				__func__, threadID, static_cast<void*>(this), (unit != nullptr ? unit->id : -1));
+			continue;
+		}
 
 		t->MakeGarbage();
-		cobEngine->RemoveThread(t->GetID());
-
-		threadIDs.pop_back();
+		cobEngine->RemoveThread(threadID);
 	}
 
 	cobEngine->SanityCheckThreads(this);
@@ -601,6 +608,8 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 		// dtor runs the callback
 		if (retCode != nullptr)
 			*retCode = newThread.GetRetCode();
+
+		cobEngine->RemoveThread(newThread.GetID());
 	} else {
 		cobEngine->AddThread(std::move(newThread));
 	}
