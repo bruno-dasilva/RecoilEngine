@@ -146,8 +146,8 @@ private:
 
 public:
 	// mirrors original->{mins,maxs,HasGeometryData()}; skips pointer chase in UpdateBoundingVolume's hot loop
-	float3 origMins;
-	float3 origMaxs;
+	float3 origCenter;
+	float3 origHalfExt;
 	bool origHasGeo;
 
 	int32_t lmodelPieceIndex; // index of this piece into LocalModel::pieces

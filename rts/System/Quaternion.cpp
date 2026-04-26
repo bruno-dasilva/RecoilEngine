@@ -318,6 +318,20 @@ float4 CQuaternion::Rotate(const float4& v) const
 	return float4{ Rotate(float3(v.xyz)), v.w };
 }
 
+float3 CQuaternion::AbsRotate(const float3& v) const
+{
+	assert(Normalized());
+	const float qxx = x * x, qyy = y * y, qzz = z * z;
+	const float qxy = x * y, qxz = x * z, qyz = y * z;
+	const float qrx = r * x, qry = r * y, qrz = r * z;
+
+	return float3{
+		std::abs(1.0f - 2.0f * (qyy + qzz)) * v.x + std::abs(2.0f * (qxy - qrz))        * v.y + std::abs(2.0f * (qxz + qry))        * v.z,
+		std::abs(2.0f * (qxy + qrz))        * v.x + std::abs(1.0f - 2.0f * (qxx + qzz)) * v.y + std::abs(2.0f * (qyz - qrx))        * v.z,
+		std::abs(2.0f * (qxz - qry))        * v.x + std::abs(2.0f * (qyz + qrx))        * v.y + std::abs(1.0f - 2.0f * (qxx + qyy)) * v.z
+	};
+}
+
 bool CQuaternion::equals(const CQuaternion& rhs) const
 {
 	return

@@ -81,10 +81,10 @@ void LocalModel::SetModel(const S3DModel* model, bool initialize)
 		for (size_t n = 0; n < pieces.size(); n++) {
 			S3DModelPiece* omp = model->GetPiece(n);
 
-			pieces[n].original   = omp;
-			pieces[n].origMins   = omp->mins;
-			pieces[n].origMaxs   = omp->maxs;
-			pieces[n].origHasGeo = omp->HasGeometryData();
+			pieces[n].original    = omp;
+			pieces[n].origCenter  = (omp->mins + omp->maxs) * 0.5f;
+			pieces[n].origHalfExt = (omp->maxs - omp->mins) * 0.5f;
+			pieces[n].origHasGeo  = omp->HasGeometryData();
 		}
 
 		pieces[0].UpdateChildTransformRec(true);
@@ -151,30 +151,14 @@ void LocalModel::UpdateBoundingVolume()
 		if (!lmPiece.origHasGeo)
 			continue;
 
+		// AABB-of-OBB closed form: world-center = T*c, world-half-extents = |s|*|R|*h.
+		// equivalent to transforming all 8 corners and taking the axis-aligned hull.
 		const auto& tra = lmPiece.GetModelSpaceTransform();
+		const float3 wc = tra * lmPiece.origCenter;
+		const float3 wh = std::abs(tra.s) * tra.r.AbsRotate(lmPiece.origHalfExt);
 
-		// transform only the corners of the piece's bounding-box
-		const float3 pMins = lmPiece.origMins;
-		const float3 pMaxs = lmPiece.origMaxs;
-		const float3 verts[8] = {
-			// bottom
-			float3(pMins.x,  pMins.y,  pMins.z),
-			float3(pMaxs.x,  pMins.y,  pMins.z),
-			float3(pMaxs.x,  pMins.y,  pMaxs.z),
-			float3(pMins.x,  pMins.y,  pMaxs.z),
-			// top
-			float3(pMins.x,  pMaxs.y,  pMins.z),
-			float3(pMaxs.x,  pMaxs.y,  pMins.z),
-			float3(pMaxs.x,  pMaxs.y,  pMaxs.z),
-			float3(pMins.x,  pMaxs.y,  pMaxs.z),
-		};
-
-		for (const float3& v: verts) {
-			const float3 vertex = tra * v;
-
-			bbMins = float3::min(bbMins, vertex);
-			bbMaxs = float3::max(bbMaxs, vertex);
-		}
+		bbMins = float3::min(bbMins, wc - wh);
+		bbMaxs = float3::max(bbMaxs, wc + wh);
 	}
 
 	// note: offset is relative to object->pos
