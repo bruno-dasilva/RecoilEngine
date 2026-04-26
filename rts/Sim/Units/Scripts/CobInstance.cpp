@@ -83,6 +83,7 @@ void CCobInstance::PostLoad()
 
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 
 		t->cobInst = this;
 		t->cobFile = cobFile;
@@ -101,18 +102,12 @@ CCobInstance::~CCobInstance()
 	// delete our threads, make sure callbacks do not run.
 	// MakeGarbage() neuters Stop()'s self-removal, so we own the pop_back here.
 	while (!threadIDs.empty()) {
-		const int threadID = threadIDs.back();
-		threadIDs.pop_back();
-
-		CCobThread* t = cobEngine->GetThread(threadID);
-		if (t == nullptr) {
-			LOG_L(L_ERROR, "[CCobInstance::%s] stale thread id %d in threadIDs (instance=%p, unit=%d)",
-				__func__, threadID, static_cast<void*>(this), (unit != nullptr ? unit->id : -1));
-			continue;
-		}
+		CCobThread* t = cobEngine->GetThread(threadIDs.back());
+		assert(t != nullptr);
 
 		t->MakeGarbage();
-		cobEngine->RemoveThread(threadID);
+		cobEngine->RemoveThread(t->GetID());
+		threadIDs.pop_back();
 	}
 
 	cobEngine->SanityCheckThreads(this);
@@ -521,6 +516,7 @@ void CCobInstance::AnimFinished(AnimType type, int piece, int axis)
 	ZoneScoped;
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 		t->AnimFinished(type, piece, axis);
 	}
 }
@@ -741,6 +737,7 @@ void CCobInstance::Signal(int signal)
 	RECOIL_DETAILED_TRACY_ZONE;
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 
 		if ((signal & t->GetSignalMask()) == 0)
 			continue;
