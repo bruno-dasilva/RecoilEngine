@@ -130,8 +130,8 @@ public:
 	const S3DModelPiece* original;
 
 	// mirrors original->{mins,maxs,HasGeometryData()}; skips pointer chase in UpdateBoundingVolume's hot loop
-	float3 origMins;
-	float3 origMaxs;
+	float3 origCenter;
+	float3 origHalfExt;
 	bool origHasGeo;
 
 	LocalModel* localModel;

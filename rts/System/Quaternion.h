@@ -80,6 +80,10 @@ public:
 	float3 Rotate(const float3& v) const;
 	float4 Rotate(const float4& v) const;
 
+	// returns |R| * v, where R is the rotation matrix of this quaternion.
+	// for computing the world-space half-extents of a rotated AABB.
+	float3 AbsRotate(const float3& v) const;
+
 	bool equals(const CQuaternion& rhs) const;
 public:
 	constexpr CQuaternion& operator= (const CQuaternion&) = default;
