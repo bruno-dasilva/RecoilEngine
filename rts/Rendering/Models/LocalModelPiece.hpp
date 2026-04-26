@@ -22,9 +22,10 @@ struct LocalModelPiece
 	CR_DECLARE_STRUCT(LocalModelPiece)
 
 	LocalModelPiece()
-		: dirty(true)
+		: noInterpolation { false }
+		, dirty(true)
+		, matDirty(true)
 		, wasUpdated{ true }
-		, noInterpolation { false }
 	{}
 	LocalModelPiece(const S3DModelPiece* piece);
 	~LocalModelPiece();
@@ -83,7 +84,13 @@ struct LocalModelPiece
 	const float3& GetDirection() const { return dir; }
 
 	const Transform& GetModelSpaceTransform() const { return modelSpaceTra; }
-	const CMatrix44f& GetModelSpaceMatrix() const { return modelSpaceMat; }
+	const CMatrix44f& GetModelSpaceMatrix() const {
+		if (matDirty) {
+			modelSpaceMat = modelSpaceTra.ToMatrix();
+			matDirty = false;
+		}
+		return modelSpaceMat;
+	}
 
 	const CollisionVolume* GetCollisionVolume() const { return colvol; }
 	      CollisionVolume* GetCollisionVolume()       { return colvol; }
@@ -95,37 +102,59 @@ struct LocalModelPiece
 	Transform GetEffectivePrevModelSpaceTransform() const;
 
 	void PostLoad();
+
+	// Layout note: members below are ordered so the fields touched by the
+	// per-tick animation sweep (CUnitScript::TickAllAnims) pack into the first
+	// two cachelines (offsets 0-128). modelSpaceMat is lazily filled by the
+	// getter (see matDirty) so the BFS only writes line 1 + line 2 even though
+	// modelSpaceMat itself sits at offset 124 and would straddle lines 2/3 if
+	// eagerly written. Cold fields trail in later lines.
+	// Reordering does not affect creg, which resolves offsets at registration.
+
 private:
-	mutable CMatrix44f modelSpaceMat; // transform relative to root LMP (SYNCED), chained pieceSpaceMat's
+	// line 1 (0-64): hot, every visit
 	mutable Transform pieceSpaceTra;  // transform relative to parent LMP (SYNCED), combines <pos> and <rot>
 	mutable Transform modelSpaceTra;  // transform relative to root LMP (SYNCED), chained pieceSpaceTra's
 
+public:
+	// line 2 (64-128): hot, every visit + dirty branch
+	LocalModelPiece* parent;
+	const S3DModelPiece* original;
+
+private:
 	float3 pos;      // translation relative to parent LMP, *INITIALLY* equal to original->offset
 	float3 rot;      // orientation relative to parent LMP, in radians (updated by scripts)
 	float scale;     // uniform scaling
 
-	mutable std::array<bool, 3> noInterpolation; // rotate, move, scale
-	mutable bool dirty;
-
-	Transform prevModelSpaceTra;
-
-	CollisionVolume* colvol;
-
-	float3 dir;      // cached copy of original->GetEmitDir()
-
-	mutable std::array<bool, 2> wasUpdated; // currFrame, prevFrame
-	bool scriptSetVisible; // TODO: add (visibility) maxradius!
 public:
 	uint32_t rank;   // copy from 3DModelPiece
-	int32_t lmodelPieceIndex; // index of this piece into LocalModel::pieces
-	int32_t scriptPieceIndex; // index of this piece into UnitScript::pieces
+
+private:
+	mutable std::array<bool, 3> noInterpolation; // rotate, move, scale
+	mutable bool dirty;
+	mutable bool matDirty; // modelSpaceMat is stale w.r.t. modelSpaceTra; refilled on read
+	bool scriptSetVisible; // TODO: add (visibility) maxradius!
+
+public:
 	bool blockScriptAnims; // if true, Set{Position,Rotation} are ignored for this piece
 
-	std::vector<LocalModelPiece*> children;
-	LocalModelPiece* parent;
+private:
+	mutable std::array<bool, 2> wasUpdated; // currFrame, prevFrame
 
-	std::vector<uint32_t> lodDispLists;
-	const S3DModelPiece* original;
+	// line 3 onward: cold
+	mutable CMatrix44f modelSpaceMat; // transform relative to root LMP (SYNCED), chained pieceSpaceMat's
+	Transform prevModelSpaceTra;
+	float3 dir;      // cached copy of original->GetEmitDir()
 
+public:
+	int32_t lmodelPieceIndex; // index of this piece into LocalModel::pieces
+	int32_t scriptPieceIndex; // index of this piece into UnitScript::pieces
 	LocalModel* localModel;
+
+private:
+	CollisionVolume* colvol;
+
+public:
+	std::vector<LocalModelPiece*> children;
+	std::vector<uint32_t> lodDispLists;
 };
