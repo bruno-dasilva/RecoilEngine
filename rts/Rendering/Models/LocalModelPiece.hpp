@@ -145,6 +145,11 @@ private:
 	float3 dir;      // cached copy of original->GetEmitDir()
 
 public:
+	// mirrors original->{mins,maxs,HasGeometryData()}; skips pointer chase in UpdateBoundingVolume's hot loop
+	float3 origMins;
+	float3 origMaxs;
+	bool origHasGeo;
+
 	int32_t lmodelPieceIndex; // index of this piece into LocalModel::pieces
 	int32_t scriptPieceIndex; // index of this piece into UnitScript::pieces
 	LocalModel* localModel;
