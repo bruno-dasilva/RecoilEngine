@@ -23,6 +23,7 @@ struct LocalModelPiece
 
 	LocalModelPiece()
 		: dirty(true)
+		, matDirty(true)
 		, wasUpdated{ true }
 		, noInterpolation { false }
 	{}
@@ -83,7 +84,13 @@ struct LocalModelPiece
 	const float3& GetDirection() const { return dir; }
 
 	const Transform& GetModelSpaceTransform() const { return modelSpaceTra; }
-	const CMatrix44f& GetModelSpaceMatrix() const { return modelSpaceMat; }
+	const CMatrix44f& GetModelSpaceMatrix() const {
+		if (matDirty) {
+			modelSpaceMat = modelSpaceTra.ToMatrix();
+			matDirty = false;
+		}
+		return modelSpaceMat;
+	}
 
 	const CollisionVolume* GetCollisionVolume() const { return colvol; }
 	      CollisionVolume* GetCollisionVolume()       { return colvol; }
@@ -106,6 +113,7 @@ private:
 
 	mutable std::array<bool, 3> noInterpolation; // rotate, move, scale
 	mutable bool dirty;
+	mutable bool matDirty; // modelSpaceMat is stale w.r.t. modelSpaceTra; refilled on read
 
 	Transform prevModelSpaceTra;
 
