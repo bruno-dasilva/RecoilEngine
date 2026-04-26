@@ -46,20 +46,17 @@ CR_REG_METADATA(LocalModelPiece, (
  */
 
 LocalModelPiece::LocalModelPiece(const S3DModelPiece* piece)
-	: dirty(true)
-	, matDirty(true)
+	: parent(nullptr) // set later
+	, original(piece)
 	, rank(piece->rank)
-	, wasUpdated{ true }
 	, noInterpolation{ false }
-
+	, dirty(true)
+	, matDirty(true)
 	, scriptSetVisible(true)
 	, blockScriptAnims(false)
-
+	, wasUpdated{ true }
 	, lmodelPieceIndex(-1)
 	, scriptPieceIndex(-1)
-
-	, original(piece)
-	, parent(nullptr) // set later
 {
 	assert(piece != nullptr);
 
