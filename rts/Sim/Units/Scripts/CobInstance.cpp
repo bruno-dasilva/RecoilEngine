@@ -568,7 +568,7 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 
 	// tick the thread locally in case we're recursively running this function and then the threads may reallocate
 	CCobThread newThread(this);
-	newThread.SetID(cobEngine->GenThreadID());
+	newThread.SetID(cobEngine->AllocateThreadID());
 
 	// make sure this is run even if the call terminates instantly
 	if (cb != CBNone)
