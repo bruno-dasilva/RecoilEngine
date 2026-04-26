@@ -34,6 +34,9 @@ CR_REG_METADATA(LocalModelPiece, (
 
 	// reload
 	CR_IGNORED(original),
+	CR_IGNORED(origMins),
+	CR_IGNORED(origMaxs),
+	CR_IGNORED(origHasGeo),
 	CR_IGNORED(lodDispLists), //FIXME GL idx!
 
 	CR_POSTLOAD(PostLoad)
@@ -62,6 +65,10 @@ LocalModelPiece::LocalModelPiece(const S3DModelPiece* piece)
 	pos = piece->offset;
 	dir = piece->GetEmitDir();
 	scale = original->scale;
+
+	origMins = piece->mins;
+	origMaxs = piece->maxs;
+	origHasGeo = piece->HasGeometryData();
 
 	pieceSpaceTra = CalcPieceSpaceTransform(pos, rot, scale);
 	prevModelSpaceTra = Transform{ };

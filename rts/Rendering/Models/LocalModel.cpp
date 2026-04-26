@@ -61,7 +61,10 @@ void LocalModel::SetModel(const S3DModel* model, bool initialize)
 		for (size_t n = 0; n < pieces.size(); n++) {
 			S3DModelPiece* omp = model->GetPiece(n);
 
-			pieces[n].original = omp;
+			pieces[n].original   = omp;
+			pieces[n].origMins   = omp->mins;
+			pieces[n].origMaxs   = omp->maxs;
+			pieces[n].origHasGeo = omp->HasGeometryData();
 		}
 
 		pieces[0].UpdateChildTransformRec(true);
@@ -126,16 +129,15 @@ void LocalModel::UpdateBoundingVolume()
 	float3 bbMaxs = DEF_MAX_SIZE;
 
 	for (const auto& lmPiece: pieces) {
-		const auto& tra = lmPiece.GetModelSpaceTransform();
-		const S3DModelPiece* piece = lmPiece.original;
-
 		// skip empty pieces or bounds will not be sensible
-		if (!piece->HasGeometryData())
+		if (!lmPiece.origHasGeo)
 			continue;
 
+		const auto& tra = lmPiece.GetModelSpaceTransform();
+
 		// transform only the corners of the piece's bounding-box
-		const float3 pMins = piece->mins;
-		const float3 pMaxs = piece->maxs;
+		const float3 pMins = lmPiece.origMins;
+		const float3 pMaxs = lmPiece.origMaxs;
 		const float3 verts[8] = {
 			// bottom
 			float3(pMins.x,  pMins.y,  pMins.z),
