@@ -226,41 +226,33 @@ void CUnitScript::TickAllAnims(int deltaTime)
 
 	spring::VectorEraseIfAll(anims, [](const auto& ai) { return ai.done; });
 
-	auto* rootPiece = unit->localModel.GetRoot();
 #if 1
-	// BFS pass
-	thread_local std::deque<std::pair<LocalModelPiece*, Transform>> q;
-	q.push_front({ rootPiece, Transform{} });
-
+	// Linear sweep: pieces are stored in pre-order DFS (parent index < child index)
+	// by LocalModel::CreateLocalModelPieces, so each piece's parent->modelSpaceTra
+	// is already up-to-date when read. HW prefetcher streams the contiguous vector.
+	auto& lmPieces = unit->localModel.pieces;
 	uint32_t lastDirtyRank = uint32_t(-1);
 
-	while (!q.empty()) {
-		// copy
-		auto [lmp, pTra] = q.front();
-		q.pop_front();
+	for (size_t i = 0; i < lmPieces.size(); ++i) {
+		auto& lmp = lmPieces[i];
 
-		if (lmp->GetDirty()) {
-			lmp->SetDirty(false);
+		if (lmp.GetDirty()) {
+			lmp.SetDirty(false);
 
-			if unlikely(lmp->rank < lastDirtyRank) {
-				lastDirtyRank = lmp->rank;
+			if unlikely(lmp.rank < lastDirtyRank) {
+				lastDirtyRank = lmp.rank;
 			}
 
-			lmp->UpdatePieceSpaceTransform();
+			lmp.UpdatePieceSpaceTransform();
 		}
-		if likely(lmp->rank >= lastDirtyRank) {
-			lmp->UpdateModelSpaceTransform(pTra);
-			lmp->SetWasUpdated(true);
-		}
-
-		const Transform& modelTra = lmp->GetModelSpaceTransform();
-
-		for (auto* child : lmp->children) {
-			q.push_back({ child, modelTra });
+		if likely(lmp.rank >= lastDirtyRank) {
+			lmp.UpdateModelSpaceTransform(lmp.parent);
+			lmp.SetWasUpdated(true);
 		}
 	}
 #else
 	// DFS pass
+	auto* rootPiece = unit->localModel.GetRoot();
 
 	auto WalkDFS = [lastDirtyRank = uint32_t(-1)](this auto&& self, LocalModelPiece* lmp, const Transform& pTra) -> void {
 		if (lmp->GetDirty()) {
