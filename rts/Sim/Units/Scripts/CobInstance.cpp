@@ -83,6 +83,7 @@ void CCobInstance::PostLoad()
 
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 
 		t->cobInst = this;
 		t->cobFile = cobFile;
@@ -98,13 +99,14 @@ CCobInstance::~CCobInstance()
 	// this may be dangerous, is it really desired?
 	// Destroy();
 
-	// delete our threads, make sure callbacks do not run
+	// delete our threads, make sure callbacks do not run.
+	// MakeGarbage() neuters Stop()'s self-removal, so we own the pop_back here.
 	while (!threadIDs.empty()) {
 		CCobThread* t = cobEngine->GetThread(threadIDs.back());
+		assert(t != nullptr);
 
 		t->MakeGarbage();
 		cobEngine->RemoveThread(t->GetID());
-
 		threadIDs.pop_back();
 	}
 
@@ -514,6 +516,7 @@ void CCobInstance::AnimFinished(AnimType type, int piece, int axis)
 	ZoneScoped;
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 		t->AnimFinished(type, piece, axis);
 	}
 }
@@ -568,7 +571,7 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 
 	// tick the thread locally in case we're recursively running this function and then the threads may reallocate
 	CCobThread newThread(this);
-	newThread.SetID(cobEngine->GenThreadID());
+	newThread.SetID(cobEngine->AllocateThreadID());
 
 	// make sure this is run even if the call terminates instantly
 	if (cb != CBNone)
@@ -603,6 +606,8 @@ int CCobInstance::RealCall(int functionId, std::array<int, 1 + MAX_COB_ARGS>& ar
 		// dtor runs the callback
 		if (retCode != nullptr)
 			*retCode = newThread.GetRetCode();
+
+		cobEngine->RemoveThread(newThread.GetID());
 	} else {
 		cobEngine->AddThread(std::move(newThread));
 	}
@@ -732,6 +737,7 @@ void CCobInstance::Signal(int signal)
 	RECOIL_DETAILED_TRACY_ZONE;
 	for (int threadID: threadIDs) {
 		CCobThread* t = cobEngine->GetThread(threadID);
+		assert(t != nullptr);
 
 		if ((signal & t->GetSignalMask()) == 0)
 			continue;
