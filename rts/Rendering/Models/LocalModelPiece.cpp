@@ -23,6 +23,7 @@ CR_REG_METADATA(LocalModelPiece, (
 	CR_IGNORED(wasUpdated),
 	CR_MEMBER(noInterpolation),
 	CR_MEMBER(dirty),
+	CR_IGNORED(matDirty),
 
 	CR_MEMBER(scriptSetVisible),
 	CR_MEMBER(blockScriptAnims),
@@ -46,6 +47,7 @@ CR_REG_METADATA(LocalModelPiece, (
 
 LocalModelPiece::LocalModelPiece(const S3DModelPiece* piece)
 	: dirty(true)
+	, matDirty(true)
 	, rank(piece->rank)
 	, wasUpdated{ true }
 	, noInterpolation{ false }
@@ -173,7 +175,7 @@ void LocalModelPiece::UpdatePieceSpaceTransform()
 void LocalModelPiece::UpdateModelSpaceTransform(const Transform& pTra)
 {
 	modelSpaceTra = pTra * pieceSpaceTra;
-	modelSpaceMat = modelSpaceTra.ToMatrix();
+	matDirty = true;
 }
 
 void LocalModelPiece::UpdateModelSpaceTransform(const LocalModelPiece* parent)
@@ -183,7 +185,7 @@ void LocalModelPiece::UpdateModelSpaceTransform(const LocalModelPiece* parent)
 	else
 		modelSpaceTra = pieceSpaceTra;
 
-	modelSpaceMat = modelSpaceTra.ToMatrix();
+	matDirty = true;
 }
 
 void LocalModelPiece::UpdateChildTransformRec(bool updateChildTransform) const
@@ -204,7 +206,7 @@ void LocalModelPiece::UpdateChildTransformRec(bool updateChildTransform) const
 		else
 			modelSpaceTra = pieceSpaceTra;
 
-		modelSpaceMat = modelSpaceTra.ToMatrix();
+		matDirty = true;
 	}
 
 	for (auto& child : children) {
@@ -228,7 +230,7 @@ void LocalModelPiece::UpdateParentMatricesRec() const
 	else
 		modelSpaceTra = pieceSpaceTra;
 
-	modelSpaceMat = modelSpaceTra.ToMatrix();
+	matDirty = true;
 }
 
 Transform LocalModelPiece::CalcPieceSpaceTransformOrig(const float3& p, const float3& r, float s) const
@@ -313,4 +315,5 @@ bool LocalModelPiece::GetEmitDirPos(float3& emitPos, float3& emitDir) const
 void LocalModelPiece::PostLoad()
 {
 	wasUpdated = { true };
+	matDirty = true;
 }
