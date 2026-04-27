@@ -98,6 +98,7 @@ CR_REG_METADATA(CWeapon, (
 	CR_MEMBER(aimFromPos),
 	CR_MEMBER(relWeaponMuzzlePos),
 	CR_MEMBER(weaponMuzzlePos),
+	CR_MEMBER(relWeaponDir),
 	CR_MEMBER(weaponDir),
 	CR_MEMBER(mainDir),
 	CR_MEMBER(wantedDir),
@@ -184,6 +185,7 @@ CWeapon::CWeapon(CUnit* owner, const WeaponDef* def):
 	aimFromPos(ZeroVector),
 	relWeaponMuzzlePos(UpVector),
 	weaponMuzzlePos(ZeroVector),
+	relWeaponDir(FwdVector),
 	weaponDir(ZeroVector),
 	mainDir(FwdVector),
 	wantedDir(UpVector),
@@ -268,6 +270,11 @@ void CWeapon::ReBindLocalModelPieces()
 {
 	aimFromPieceCache = owner->script->SafeGetPiece(aimFromPiece);
 	muzzlePieceCache  = owner->script->SafeGetPiece(muzzlePiece);
+
+	// invalidate so the next UpdateWeaponVectors re-reads piece transforms;
+	// the cached pointer (and possibly its underlying piece) may have changed.
+	aimFromPieceGen = ~0u;
+	muzzlePieceGen  = ~0u;
 }
 
 
@@ -285,17 +292,28 @@ void CWeapon::UpdateWeaponVectors()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 
-	relAimFromPos = (aimFromPieceCache != nullptr)
-		? aimFromPieceCache->GetAbsolutePos()
-		: float3{};
+	if (aimFromPieceCache != nullptr) {
+		const uint32_t gen = aimFromPieceCache->modelSpaceTraGen;
+		if (aimFromPieceGen != gen) {
+			relAimFromPos = aimFromPieceCache->GetAbsolutePos();
+			aimFromPieceGen = gen;
+		}
+	} else {
+		relAimFromPos = float3{};
+	}
 
-	if (muzzlePieceCache != nullptr)
-		muzzlePieceCache->GetEmitDirPos(relWeaponMuzzlePos, weaponDir);
-	// else: leave relWeaponMuzzlePos / weaponDir untouched, matching CUnitScript::GetEmitDirPos
+	if (muzzlePieceCache != nullptr) {
+		const uint32_t gen = muzzlePieceCache->modelSpaceTraGen;
+		if (muzzlePieceGen != gen) {
+			muzzlePieceCache->GetEmitDirPos(relWeaponMuzzlePos, relWeaponDir);
+			muzzlePieceGen = gen;
+		}
+	}
+	// else: leave relWeaponMuzzlePos / relWeaponDir untouched, matching CUnitScript::GetEmitDirPos
 
 	aimFromPos = owner->GetObjectSpacePos(relAimFromPos);
 	weaponMuzzlePos = owner->GetObjectSpacePos(relWeaponMuzzlePos);
-	weaponDir = owner->GetObjectSpaceVec(weaponDir).SafeNormalize();
+	weaponDir = owner->GetObjectSpaceVec(relWeaponDir).SafeNormalize();
 
 	// hope that we are underground because we are a popup weapon and will come above ground later
 	if (aimFromPos.y < CGround::GetHeightReal(aimFromPos.x, aimFromPos.z)) {
@@ -1009,6 +1027,7 @@ WeaponVectorsState CWeapon::SaveWeaponVectors() const
 	return WeaponVectorsState{
 		.relAimFromPos = relAimFromPos,
 		.relWeaponMuzzlePos = relWeaponMuzzlePos,
+		.relWeaponDir = relWeaponDir,
 		.aimFromPos = aimFromPos,
 		.weaponMuzzlePos = weaponMuzzlePos,
 		.weaponDir = weaponDir
@@ -1019,6 +1038,7 @@ void CWeapon::LoadWeaponVectors(const WeaponVectorsState& wvs)
 {
 	relAimFromPos = wvs.relAimFromPos;
 	relWeaponMuzzlePos = wvs.relWeaponMuzzlePos;
+	relWeaponDir = wvs.relWeaponDir;
 	aimFromPos = wvs.aimFromPos;
 	weaponMuzzlePos = wvs.weaponMuzzlePos;
 	weaponDir = wvs.weaponDir;
