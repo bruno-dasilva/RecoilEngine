@@ -115,6 +115,10 @@ public:
 	      CUnit* GetUnit()       { return unit; }
 	const CUnit* GetUnit() const { return unit; }
 
+	// rebind LocalModelPiece* caches on every weapon of the owner unit;
+	// call after pieces[] has been (re)populated.
+	void RebindWeaponPieceCaches();
+
 	auto GetAnimArrayChecksum() const { return checksum; }
 	void TickAllAnims(int tickRate);
 	bool TickAnimFinished();

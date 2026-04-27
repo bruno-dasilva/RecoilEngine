@@ -174,6 +174,8 @@ void CCobInstance::MapScriptToModelPieces(LocalModel* lmodel)
 			LOG_L(L_WARNING, fmtString, __FUNCTION__, pieceName, scriptName, unit->unitDef->name.c_str());
 		}
 	}
+
+	RebindWeaponPieceCaches();
 }
 
 
