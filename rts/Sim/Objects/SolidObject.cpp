@@ -441,12 +441,32 @@ void CSolidObject::UpdateDirVectors(bool useGroundNormal, bool useObjectNormal, 
 	UpdateDirVectors(uDir);
 }
 
+// True iff CQuaternion(0, 0, 0, 2.0f).ANormalize() produces (0, 0, 0, 1)
+// byte-exactly on this build's toolchain. When true, the (uDir.x==0 &&
+// uDir.z==0) fast path below is bit-equivalent to the quaternion path
+// (Rotate degenerates to r*r*v == 1.0f * v == v). Same value on every
+// client of a given binary, so cannot diverge in multiplayer.
+static const bool kQuatIdentityIsExact = []{
+	CQuaternion q(0.0f, 0.0f, 0.0f, 2.0f);
+	q.ANormalize();
+	return q.r == 1.0f && q.x == 0.0f && q.y == 0.0f && q.z == 0.0f;
+}();
+
 void CSolidObject::UpdateDirVectors(const float3& uDir)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 	// set initial rotation of the object around updir=UpVector first
 	const float3 fDir = GetVectorFromHeading(heading);
 	const float3 rDir = float3{ -fDir.z, 0.0f, fDir.x };
+
+	if (kQuatIdentityIsExact && uDir.x == 0.0f && uDir.z == 0.0f) {
+		// uDir == UpVector: quaternion reduces to identity, skip the rotate
+		frontdir = fDir;
+		rightdir = rDir;
+		updir = uDir;
+		preFrameDirty = true;
+		return;
+	}
 
 	// construct quaternion to describe rotation from UpVector to uDir
 	// can use CQuaternion::MakeFrom(const float3& v1, const float3& v2);
