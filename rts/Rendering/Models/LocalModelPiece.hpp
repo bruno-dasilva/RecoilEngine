@@ -119,6 +119,10 @@ public:
 	LocalModelPiece* parent;
 	const S3DModelPiece* original;
 
+	// bumps on every modelSpaceTra write; lets external readers (CWeapon) skip
+	// re-deriving piece-relative positions when nothing has changed.
+	mutable uint32_t modelSpaceTraGen = 0;
+
 private:
 	float3 pos;      // translation relative to parent LMP, *INITIALLY* equal to original->offset
 	float3 rot;      // orientation relative to parent LMP, in radians (updated by scripts)

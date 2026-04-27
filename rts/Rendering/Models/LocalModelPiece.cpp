@@ -181,6 +181,7 @@ void LocalModelPiece::UpdateModelSpaceTransform(const Transform& pTra)
 {
 	modelSpaceTra = pTra * pieceSpaceTra;
 	matDirty = true;
+	++modelSpaceTraGen;
 }
 
 void LocalModelPiece::UpdateModelSpaceTransform(const LocalModelPiece* parent)
@@ -191,6 +192,7 @@ void LocalModelPiece::UpdateModelSpaceTransform(const LocalModelPiece* parent)
 		modelSpaceTra = pieceSpaceTra;
 
 	matDirty = true;
+	++modelSpaceTraGen;
 }
 
 void LocalModelPiece::UpdateChildTransformRec(bool updateChildTransform) const
@@ -212,6 +214,7 @@ void LocalModelPiece::UpdateChildTransformRec(bool updateChildTransform) const
 			modelSpaceTra = pieceSpaceTra;
 
 		matDirty = true;
+		++modelSpaceTraGen;
 	}
 
 	for (auto& child : children) {
@@ -236,6 +239,7 @@ void LocalModelPiece::UpdateParentMatricesRec() const
 		modelSpaceTra = pieceSpaceTra;
 
 	matDirty = true;
+	++modelSpaceTraGen;
 }
 
 Transform LocalModelPiece::CalcPieceSpaceTransformOrig(const float3& p, const float3& r, float s) const

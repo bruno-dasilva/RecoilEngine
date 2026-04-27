@@ -20,6 +20,7 @@ struct WeaponDef;
 struct WeaponVectorsState {
 	float3 relAimFromPos;
 	float3 relWeaponMuzzlePos;
+	float3 relWeaponDir;
 	float3 aimFromPos;
 	float3 weaponMuzzlePos;
 	float3 weaponDir;
@@ -157,6 +158,11 @@ public:
 	LocalModelPiece* aimFromPieceCache = nullptr;
 	LocalModelPiece* muzzlePieceCache = nullptr;
 
+	// last-seen LocalModelPiece::modelSpaceTraGen for the cached pieces;
+	// ~0u sentinel forces a re-read on next UpdateWeaponVectors.
+	uint32_t aimFromPieceGen = ~0u;
+	uint32_t muzzlePieceGen  = ~0u;
+
 	int reaimTime;                          // time between successive reaims in ticks
 
 	int reloadTime;                         // time between successive fires in ticks
@@ -208,6 +214,7 @@ public:
 	float3 aimFromPos;                      // absolute weapon pos
 	float3 relWeaponMuzzlePos;              // position of the firepoint
 	float3 weaponMuzzlePos;
+	float3 relWeaponDir;                    // emit dir in object space (script-piece output, pre owner-rotate)
 	float3 weaponDir;
 	float3 mainDir;                         // main aiming-direction of weapon
 	float3 wantedDir;                       // norm(currentTargetPos - weaponMuzzlePos)
