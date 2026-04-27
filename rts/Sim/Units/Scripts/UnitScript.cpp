@@ -93,6 +93,16 @@ CUnitScript::CUnitScript(CUnit* unit)
 { }
 
 
+void CUnitScript::RebindWeaponPieceCaches()
+{
+	if (unit == nullptr)
+		return;
+
+	for (CWeapon* w : unit->weapons)
+		w->ReBindLocalModelPieces();
+}
+
+
 CUnitScript::~CUnitScript()
 {
 	// Remove us from possible animation ticking
