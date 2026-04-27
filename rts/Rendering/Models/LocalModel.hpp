@@ -10,6 +10,7 @@
 struct S3DModel;
 struct S3DModelPiece;
 struct LuaObjectMaterialData;
+class CSolidObject;
 
 struct LocalModel
 {
@@ -72,6 +73,12 @@ struct LocalModel
 
 	void SetBoundariesNeedsRecalc()       { needsBoundariesRecalc = true; }
 	bool GetBoundariesNeedsRecalc() const { return needsBoundariesRecalc; }
+
+	// back-pointer to the owning CSolidObject so per-piece script setters can
+	// mark the owner dirty for UpdatePrevFrameTransform gating. nullptr for
+	// orphaned/test models.
+	void SetOwner(CSolidObject* o) { owner = o; }
+	CSolidObject* GetOwner() const { return owner; }
 private:
 	LocalModelPiece* CreateLocalModelPieces(const S3DModelPiece* mpParent);
 
@@ -89,4 +96,6 @@ private:
 	LuaObjectMaterialData* luaMaterialData = nullptr;
 
 	bool needsBoundariesRecalc = true;
+
+	CSolidObject* owner = nullptr;
 };
