@@ -391,9 +391,14 @@ float3 CSolidObject::GetDragAccelerationVec(float atmosphericDensity, float wate
 float3 CSolidObject::GetWantedUpDir(bool useGroundNormal, bool useObjectNormal, float dirSmoothing) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	const float3 groundUp = CGround::GetSmoothNormal(pos.x, pos.z);
 	const float3 curUpDir = float3{updir};
 	const float3 objectUp = mix(UpVector, curUpDir, useObjectNormal);
+	// When useGroundNormal is false, mix(objectUp, groundUp, 0.0f) == objectUp
+	// bit-exactly per IEEE-754, so groundUp is never observed — skip the
+	// 4 cache-unfriendly normalmap reads + isqrt in CGround::GetSmoothNormal.
+	if (!useGroundNormal)
+		return mix(objectUp, curUpDir, dirSmoothing).Normalize();
+	const float3 groundUp = CGround::GetSmoothNormal(pos.x, pos.z);
 	const float3 targetUp = mix(objectUp, groundUp, useGroundNormal);
 	const float3 wantedUp = mix(targetUp, curUpDir, dirSmoothing).Normalize();
 
