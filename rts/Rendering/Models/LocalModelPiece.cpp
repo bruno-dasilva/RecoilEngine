@@ -2,6 +2,7 @@
 
 #include "3DModelPiece.hpp"
 #include "LocalModel.hpp"
+#include "Sim/Objects/SolidObject.h"
 #include "Rendering/GL/myGL.h"
 #include "System/Misc/TracyDefs.h"
 
@@ -105,6 +106,8 @@ void LocalModelPiece::SetFloat3(const float3& src, float3& dst) {
 	if (dirty) {
 		assert(localModel);
 		localModel->SetBoundariesNeedsRecalc();
+		if (CSolidObject* owner = localModel->GetOwner())
+			owner->SetPreFrameDirty();
 	}
 }
 
@@ -120,6 +123,8 @@ void LocalModelPiece::SetFloat(const float& src, float& dst)
 	if (dirty) {
 		assert(localModel);
 		localModel->SetBoundariesNeedsRecalc();
+		if (CSolidObject* owner = localModel->GetOwner())
+			owner->SetPreFrameDirty();
 	}
 }
 
